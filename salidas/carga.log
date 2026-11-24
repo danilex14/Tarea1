@@ -1,0 +1,166 @@
+
+[1m== 0. Fuentes en datos_fuente/[0m
+   OSM:  datos_fuente/chile-261122.osm.pbf
+   GTFS: datos_fuente/GTFS_20261114_v2.zip
+   DPA:  datos_fuente/DPA_2023.zip
+   Zona: santiago-centro · caja lon [-70.75, -70.52] · lat [-33.52, -33.36]
+
+[1m== 1. Contenedores (docker compose up -d --wait)[0m
+ Network tarea1_default Creating 
+ Volume t1-pgdata Creating 
+ Volume t1-pgdata Created 
+ Network tarea1_default Created 
+ Container t1-postgis Creating 
+ Container t1-postgis Created 
+ Container t1-gdal Creating 
+ Container t1-gdal Created 
+ Container t1-postgis Starting 
+ Container t1-postgis Started 
+ Container t1-postgis Waiting 
+ Container t1-postgis Healthy 
+ Container t1-gdal Starting 
+ Container t1-gdal Started 
+ Container t1-postgis Waiting 
+ Container t1-gdal Waiting 
+ Container t1-gdal Healthy 
+ Container t1-postgis Healthy 
+   ✓ 4 s
+
+[1m== 2a. OSM: recorte de la caja y reproyección a 5361 → datos/osm_santiago-centro.gpkg[0m
+0...10...20...30...40...50...60...70...80..Warning 1: Non closed ring detected. To avoid accepting it, set the OGR_GEOMETRY_ACCEPT_UNCLOSED_RING configuration option to NO
+Warning 1: Non closed ring detected. To avoid accepting it, set the OGR_GEOMETRY_ACCEPT_UNCLOSED_RING configuration option to NO
+Warning 1: Non closed ring detected. To avoid accepting it, set the OGR_GEOMETRY_ACCEPT_UNCLOSED_RING configuration option to NO
+Warning 1: Non closed ring detected. To avoid accepting it, set the OGR_GEOMETRY_ACCEPT_UNCLOSED_RING configuration option to NO
+Warning 1: Non closed ring detected. To avoid accepting it, set the OGR_GEOMETRY_ACCEPT_UNCLOSED_RING configuration option to NO
+Warning 1: Non closed ring detected. To avoid accepting it, set the OGR_GEOMETRY_ACCEPT_UNCLOSED_RING configuration option to NO
+Warning 1: Non closed ring detected. To avoid accepting it, set the OGR_GEOMETRY_ACCEPT_UNCLOSED_RING configuration option to NO
+Warning 1: organizePolygons() received an unexpected geometry.  Either a polygon with interior rings, or a polygon with less than 4 points, or a non-Polygon geometry.  Return arguments as a collection.
+.90...100 - done.
+   ✓ 19 s
+
+[1m== 2b. OSM: GeoPackage → PostGIS (ogr2ogr, hstore, GiST)[0m
+   points → osm_puntos  2 s
+   lines → osm_lineas  2 s
+   multipolygons → osm_poligonos  1 s
+   ✓ 5 s
+
+[1m== 2c. OSM: reparar geometrías (ST_MakeValid) y derivar capas[0m
+   ✓ 5 s
+
+[1m== 3. DPA 2023: comunas_cl en 5361[0m
+   ✓ 19 s
+
+[1m== 4a. GTFS: descomprimir GTFS_20261114_v2.zip[0m
+   cabeceras OK · stop_times.txt: 1098717 filas
+   ✓ 1 s
+
+[1m== 4b. GTFS: COPY de los CSV crudos[0m
+   ✓ 2 s
+
+[1m== 4c. GTFS: paraderos (ST_MakePoint) y recorridos (ST_MakeLine ORDER BY secuencia)[0m
+   shapes compartidos por más de una ruta: 0
+   ✓ 4 s
+
+[1m== 5. Índices espaciales y ANALYZE[0m
+   ✓ 4 s
+
+[1m== 6. Resumen → salidas/conteos.txt y salidas/fuentes.json[0m
+{
+  "zona": "santiago-centro",
+  "bbox": "-70.75 -33.52 -70.52 -33.36",
+  "osm": "chile-261122.osm.pbf (datos al 2026-11-22)",
+  "gtfs": "GTFS_20261114_v2.zip · V171.20261114 (vigencia 20261114–20261231)",
+  "dpa": "DPA 2023 (IDE Chile, comunas v1)"
+}
+== Fuentes
+ gtfs_feed_version | feed_start_date | feed_end_date 
+-------------------+-----------------+---------------
+ V171.20261114     | 20261114        | 20261231
+
+== Tablas
+      tabla      |  filas  | srid | tamano  
+-----------------+---------+------+---------
+ osm_puntos      |  258830 | 5361 | 57 MB
+ osm_lineas      |  170536 | 5361 | 48 MB
+ osm_poligonos   |  149895 | 5361 | 50 MB
+ calles          |  101584 | 5361 | 23 MB
+ edificios       |  121207 | 5361 | 40 MB
+ paraderos_osm   |    6574 | 5361 | 1000 kB
+ amenidades      |   21149 | 5361 | 3320 kB
+ paraderos_gtfs  |    6819 | 5361 | 1472 kB
+ recorridos      |     699 | 5361 | 9624 kB
+ rutas           |     344 | 5361 | 6224 kB
+ paradero_ruta   |   40313 |      | 2920 kB
+ comunas_cl      |     345 | 5361 | 109 MB
+ comunas_zona    |      30 | 5361 | 632 kB
+ comunas_sub     |      67 | 5361 | 144 kB
+ gtfs_stop_times | 1098717 |      | 88 MB
+ gtfs_shapes     |  456784 |      | 27 MB
+
+== Indices
+      tabla      |           indice            |  tipo  |   tamano   
+-----------------+-----------------------------+--------+------------
+ amenidades      | idx_amenidades_amenity      | B-tree | 168 kB
+ amenidades      | idx_amenidades_geom         | GiST   | 880 kB
+ amenidades      | idx_amenidades_salud        | GiST   | 56 kB
+ calles          | idx_calles_geom             | GiST   | 4160 kB
+ comunas_cl      | comunas_cl_pkey             | B-tree | 16 kB
+ comunas_cl      | idx_comunas_cl_geom         | GiST   | 24 kB
+ comunas_sub     | idx_comunas_sub_geom        | GiST   | 8192 bytes
+ comunas_zona    | idx_comunas_zona_geom       | GiST   | 8192 bytes
+ edificios       | idx_edificios_geom          | GiST   | 4944 kB
+ edificios       | idx_edificios_punto         | GiST   | 4888 kB
+ gtfs_stop_times | gtfs_stop_times_trip_id_idx | B-tree | 8224 kB
+ gtfs_trips      | gtfs_trips_trip_id_idx      | B-tree | 936 kB
+ gtfs_trips      | idx_gtfs_trips_shape        | B-tree | 216 kB
+ osm_lineas      | osm_lineas_geom_geom_idx    | GiST   | 7984 kB
+ osm_lineas      | osm_lineas_pkey             | B-tree | 3760 kB
+ osm_poligonos   | osm_poligonos_geom_geom_idx | GiST   | 7176 kB
+ osm_poligonos   | osm_poligonos_pkey          | B-tree | 3312 kB
+ osm_puntos      | osm_puntos_geom_geom_idx    | GiST   | 10 MB
+ osm_puntos      | osm_puntos_pkey             | B-tree | 5704 kB
+ paradero_ruta   | paradero_ruta_route_id_idx  | B-tree | 296 kB
+ paradero_ruta   | paradero_ruta_stop_id_idx   | B-tree | 568 kB
+ paraderos_gtfs  | idx_paraderos_gtfs_geom     | GiST   | 272 kB
+ paraderos_gtfs  | idx_paraderos_gtfs_id       | B-tree | 168 kB
+ paraderos_osm   | idx_paraderos_osm_geom      | GiST   | 264 kB
+ recorridos      | idx_recorridos_geom         | GiST   | 40 kB
+ recorridos      | idx_recorridos_route        | B-tree | 32 kB
+ rutas           | idx_rutas_geom              | GiST   | 24 kB
+
+== Bitacora del ETL
+      paso      |                                                         detalle                                                         |    n    
+----------------+-------------------------------------------------------------------------------------------------------------------------+---------
+ osm_reparar    | poligonos invalidos antes: IllegalArgumentException: Invalid number of points in LinearRing found 2 - must be 0 or >= 4 |      79
+ osm_reparar    | poligonos invalidos antes: IllegalArgumentException: Invalid number of points in LinearRing found 3 - must be 0 or >= 4 |     236
+ osm_reparar    | poligonos invalidos antes: Self-intersection                                                                            |      60
+ osm_reparar    | poligonos invalidos antes (total)                                                                                       |     375
+ osm_reparar    | lineas invalidas (no se reparan: no se usan como area)                                                                  |       1
+ osm_reparar    | poligonos invalidos despues                                                                                             |       0
+ osm_reparar    | poligonos vacios tras reparar (se excluyen al derivar)                                                                  |     315
+ osm_derivadas  | edificios descartados por quedar vacios                                                                                 |     203
+ comunas        | comunas_cl invalidas                                                                                                    |       0
+ comunas        | comunas_cl (pais)                                                                                                       |     345
+ comunas        | comunas que tocan la caja                                                                                               |      30
+ comunas        | partes de comunas_sub (128 vertices)                                                                                    |      67
+ gtfs_crudo     | filas routes.txt                                                                                                        |     425
+ gtfs_crudo     | filas shapes.txt                                                                                                        |  456784
+ gtfs_crudo     | filas stops.txt                                                                                                         |   18486
+ gtfs_crudo     | filas stop_times.txt                                                                                                    | 1098717
+ gtfs_crudo     | filas trips.txt                                                                                                         |   26137
+ gtfs_derivadas | paraderos_gtfs dentro de la caja                                                                                        |    6819
+ gtfs_derivadas | paraderos_gtfs modo bus                                                                                                 |    6576
+ gtfs_derivadas | paraderos_gtfs modo metro                                                                                               |     234
+ gtfs_derivadas | paraderos_gtfs modo sin_servicio                                                                                        |       1
+ gtfs_derivadas | paraderos_gtfs modo tren                                                                                                |       8
+ gtfs_derivadas | stops.txt puntos de abordaje (todo Santiago)                                                                            |   12497
+ gtfs_derivadas | recorridos (shapes) que tocan la caja                                                                                   |     699
+ gtfs_derivadas | rutas distintas que tocan la caja                                                                                       |     344
+ gtfs_derivadas | shapes con shape_pt_sequence repetido                                                                                   |       0
+ gtfs_derivadas | shapes de menos de 2 puntos                                                                                             |       0
+ gtfs_derivadas | shapes en shapes.txt                                                                                                    |     980
+ gtfs_derivadas | shapes no simples (se cruzan a si mismos: normal en circuitos)                                                          |     254
+
+   ✓ 0 s
+
+✅ Carga completa en 64 s. Siguiente: ./consultas.sh

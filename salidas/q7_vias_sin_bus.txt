@@ -1,0 +1,162 @@
+DROP TABLE IF EXISTS vias_tramos, recorridos_seg;
+DROP TABLE
+CREATE TABLE recorridos_seg AS
+SELECT shape_id, route_id, ST_Subdivide(geom, 16)::geometry(LineString, 5361) AS geom
+FROM recorridos WHERE route_type = 3;
+SELECT 52408
+CREATE INDEX idx_recorridos_seg_geom ON recorridos_seg USING GIST (geom);
+CREATE INDEX
+CREATE TABLE vias_tramos AS
+SELECT v.id AS calle_id, v.name, v.highway, ST_Length(d.geom) AS largo_m,
+       d.geom::geometry(LineString, 5361) AS geom,
+       ST_LineInterpolatePoint(d.geom, 0.5)::geometry(Point, 5361) AS medio
+FROM calles v, zona z,
+     LATERAL ST_DumpSegments(ST_Segmentize(v.geom, 50)) AS d
+WHERE v.highway IN ('trunk', 'primary', 'secondary', 'tertiary')
+  AND ST_Within(v.geom, z.geom);
+SELECT 97030
+CREATE INDEX idx_vias_tramos_medio ON vias_tramos USING GIST (medio);
+CREATE INDEX
+ALTER TABLE vias_tramos ADD COLUMN con_bus boolean;
+ALTER TABLE
+UPDATE vias_tramos t SET con_bus = EXISTS (
+    SELECT 1 FROM recorridos_seg r WHERE ST_DWithin(r.geom, t.medio, 25));
+UPDATE 97030
+ANALYZE recorridos_seg, vias_tramos;
+ANALYZE
+SELECT highway,
+       round((sum(largo_m) / 1000)::numeric, 1) AS km,
+       round((sum(largo_m) FILTER (WHERE NOT con_bus) / 1000)::numeric, 1) AS km_sin_bus,
+       round((100 * sum(largo_m) FILTER (WHERE NOT con_bus) / sum(largo_m))::numeric, 1) AS pct_sin_bus
+FROM vias_tramos GROUP BY highway
+ORDER BY array_position(ARRAY['trunk','primary','secondary','tertiary'], highway);
+  highway  |  km   | km_sin_bus | pct_sin_bus 
+-----------+-------+------------+-------------
+ trunk     |   2.8 |        2.6 |        90.2
+ primary   | 526.6 |       13.8 |         2.6
+ secondary | 633.9 |      101.8 |        16.1
+ tertiary  | 900.1 |      387.4 |        43.0
+(4 rows)
+
+SELECT c.comuna,
+       round((sum(t.largo_m) / 1000)::numeric, 1) AS km_vias_principales,
+       round((coalesce(sum(t.largo_m) FILTER (WHERE NOT t.con_bus), 0) / 1000)::numeric, 1) AS km_sin_bus,
+       round((100 * coalesce(sum(t.largo_m) FILTER (WHERE NOT t.con_bus), 0) / sum(t.largo_m))::numeric, 1) AS pct_sin_bus
+FROM comunas_zona c JOIN vias_tramos t ON ST_Contains(c.geom, t.medio)
+GROUP BY c.comuna
+HAVING sum(t.largo_m) > 5000
+ORDER BY pct_sin_bus DESC;
+       comuna        | km_vias_principales | km_sin_bus | pct_sin_bus 
+---------------------+---------------------+------------+-------------
+ Lo Barnechea        |                 6.7 |        4.6 |        68.5
+ Las Condes          |               191.1 |       83.2 |        43.5
+ Vitacura            |               119.1 |       47.2 |        39.6
+ Providencia         |               108.3 |       36.3 |        33.5
+ San Miguel          |                64.6 |       21.1 |        32.7
+ Cerro Navia         |                36.8 |        9.7 |        26.4
+ La Reina            |                92.4 |       23.7 |        25.6
+ Quilicura           |                56.2 |       14.1 |        25.1
+ Quinta Normal       |                75.7 |       18.9 |        24.9
+ Peñalolén           |               123.2 |       30.3 |        24.6
+ Independencia       |                47.8 |       11.6 |        24.3
+ Pedro Aguirre Cerda |                47.6 |       11.1 |        23.4
+ Pudahuel            |                31.1 |        7.1 |        22.8
+ La Cisterna         |                 5.4 |        1.2 |        22.7
+ Macul               |                79.2 |       18.0 |        22.7
+ Lo Prado            |                42.6 |        9.1 |        21.3
+ Maipú               |                69.0 |       14.3 |        20.6
+ San Joaquín         |                68.6 |       14.1 |        20.6
+ Ñuñoa               |               123.8 |       24.5 |        19.8
+ Lo Espejo           |                18.4 |        3.5 |        18.9
+ Huechuraba          |                49.5 |        9.3 |        18.8
+ Santiago            |               197.2 |       36.5 |        18.5
+ Cerrillos           |                67.3 |       11.5 |        17.0
+ Estación Central    |                81.8 |       13.8 |        16.9
+ Renca               |                73.4 |       11.5 |        15.7
+ La Florida          |                49.6 |        6.8 |        13.7
+ Recoleta            |                63.9 |        7.3 |        11.5
+ Conchalí            |                67.1 |        5.4 |         8.0
+ La Granja           |                 5.7 |        0.0 |         0.0
+(29 rows)
+
+SELECT coalesce(name, '(sin nombre)') AS via, highway,
+       round((sum(largo_m) FILTER (WHERE NOT con_bus) / 1000)::numeric, 2) AS km_sin_bus,
+       round((sum(largo_m) / 1000)::numeric, 2) AS km_total
+FROM vias_tramos GROUP BY name, highway
+HAVING sum(largo_m) FILTER (WHERE NOT con_bus) > 0
+ORDER BY km_sin_bus DESC LIMIT 15;
+                       via                       |  highway  | km_sin_bus | km_total 
+-------------------------------------------------+-----------+------------+----------
+ Avenida Presidente Riesco                       | secondary |       5.97 |     6.18
+ Costanera Sur                                   | secondary |       5.29 |     6.54
+ Avenida Costanera Sur                           | secondary |       4.92 |     9.81
+ Avenida Las Torres                              | tertiary  |       4.89 |    12.69
+ Avenida Diego de Almagro                        | tertiary  |       4.15 |     4.32
+ Camino La Pirámide                              | tertiary  |       4.01 |     5.00
+ Avenida Holanda                                 | tertiary  |       3.68 |     4.30
+ Llico                                           | tertiary  |       3.51 |     3.79
+ Avenida Andrés Bello                            | primary   |       3.49 |     5.40
+ Avenida El Valle                                | tertiary  |       3.46 |     5.95
+ Avenida Presidente Salvador Allende Gossens     | secondary |       3.45 |    11.66
+ Costanera Sur San Josemaría Escrivá de Balaguer | tertiary  |       3.45 |     3.47
+ Avenida Charles Hamilton                        | secondary |       3.37 |     4.04
+ Avenida Ricardo Lyon                            | tertiary  |       3.37 |     3.72
+ Avenida Presidente Sebastián Piñera Echenique   | secondary |       3.25 |     3.86
+(15 rows)
+
+EXPLAIN (ANALYZE, BUFFERS, COSTS OFF)
+SELECT count(*) FROM vias_tramos t
+WHERE EXISTS (SELECT 1 FROM recorridos r WHERE r.route_type = 3 AND ST_DWithin(r.geom, t.medio, 25));
+                                                         QUERY PLAN                                                         
+----------------------------------------------------------------------------------------------------------------------------
+ Finalize Aggregate (actual time=14006.003..14009.055 rows=1 loops=1)
+   Buffers: shared hit=20282805
+   ->  Gather (actual time=13992.711..14009.033 rows=3 loops=1)
+         Workers Planned: 2
+         Workers Launched: 2
+         Buffers: shared hit=20282805
+         ->  Partial Aggregate (actual time=13990.299..13990.302 rows=1 loops=3)
+               Buffers: shared hit=20282805
+               ->  Nested Loop Semi Join (actual time=0.558..13982.586 rows=24982 loops=3)
+                     Buffers: shared hit=20282805
+                     ->  Parallel Seq Scan on vias_tramos t (actual time=0.021..16.858 rows=32343 loops=3)
+                           Buffers: shared hit=3686
+                     ->  Index Scan using idx_recorridos_geom on recorridos r (actual time=0.429..0.429 rows=1 loops=97030)
+                           Index Cond: (geom && st_expand(t.medio, '25'::double precision))
+                           Filter: ((route_type = 3) AND st_dwithin(geom, t.medio, '25'::double precision))
+                           Rows Removed by Filter: 51
+                           Buffers: shared hit=20279119
+ Planning:
+   Buffers: shared hit=8
+ Planning Time: 0.877 ms
+ Execution Time: 14009.101 ms
+(21 rows)
+
+EXPLAIN (ANALYZE, BUFFERS, COSTS OFF)
+SELECT count(*) FROM vias_tramos t
+WHERE EXISTS (SELECT 1 FROM recorridos_seg r WHERE ST_DWithin(r.geom, t.medio, 25));
+                                                             QUERY PLAN                                                             
+------------------------------------------------------------------------------------------------------------------------------------
+ Finalize Aggregate (actual time=598.004..600.700 rows=1 loops=1)
+   Buffers: shared hit=454348
+   ->  Gather (actual time=597.997..600.694 rows=3 loops=1)
+         Workers Planned: 2
+         Workers Launched: 2
+         Buffers: shared hit=454348
+         ->  Partial Aggregate (actual time=580.413..580.415 rows=1 loops=3)
+               Buffers: shared hit=454348
+               ->  Nested Loop Semi Join (actual time=0.224..578.342 rows=24982 loops=3)
+                     Buffers: shared hit=454348
+                     ->  Parallel Seq Scan on vias_tramos t (actual time=0.031..6.014 rows=32343 loops=3)
+                           Buffers: shared hit=3686
+                     ->  Index Scan using idx_recorridos_seg_geom on recorridos_seg r (actual time=0.017..0.017 rows=1 loops=97030)
+                           Index Cond: (geom && st_expand(t.medio, '25'::double precision))
+                           Filter: st_dwithin(geom, t.medio, '25'::double precision)
+                           Rows Removed by Filter: 1
+                           Buffers: shared hit=450662
+ Planning:
+   Buffers: shared hit=26
+ Planning Time: 1.119 ms
+ Execution Time: 600.741 ms
+(21 rows)
+

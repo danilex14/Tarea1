@@ -1,0 +1,217 @@
+WITH viaje AS (                               -- un viaje por sentido
+    SELECT DISTINCT ON (t.direction_id) t.trip_id, t.direction_id
+    FROM gtfs_trips t JOIN gtfs_routes r USING (route_id)
+    WHERE r.route_short_name = '506'
+    ORDER BY t.direction_id, t.trip_id
+), p AS (
+    SELECT v.direction_id, st.stop_sequence, pg.stop_id, pg.stop_name, pg.geom
+    FROM viaje v
+    JOIN gtfs_stop_times st USING (trip_id)
+    JOIN paraderos_gtfs pg USING (stop_id)            -- solo los de la caja
+)
+SELECT p.direction_id AS sentido, p.stop_sequence AS orden, p.stop_id, p.stop_name AS paradero,
+       s.amenity, coalesce(s.name, '(sin nombre en OSM)') AS establecimiento, round(s.dist) AS metros
+FROM p
+CROSS JOIN LATERAL (
+    SELECT a.name, a.amenity, a.geom <-> p.geom AS dist
+    FROM amenidades a
+    WHERE a.amenity IN ('pharmacy', 'hospital', 'clinic', 'doctors')
+    ORDER BY a.geom <-> p.geom
+    LIMIT 1
+) s
+ORDER BY sentido, orden;
+ sentido | orden | stop_id |                       paradero                        | amenity  |              establecimiento              | metros 
+---------+-------+---------+-------------------------------------------------------+----------+-------------------------------------------+--------
+ 0       |    33 | PI387   | PI387-Parada 2 / Paradero 12 Pajaritos                | clinic   | CESFAM Clotario Blest                     |    583
+ 0       |    34 | PI388   | PI388-Parada / Colegio Santa María de Maipú           | clinic   | CESFAM Clotario Blest                     |    712
+ 0       |    35 | PI389   | PI389-Parada 2 / (M) Monte Tabor                      | pharmacy | Farmacias Saint Germain                   |    736
+ 0       |    36 | PI534   | PI534-Parada 3 / Paradero 10 Pajaritos                | pharmacy | Farmacias Saint Germain                   |    204
+ 0       |    37 | PI535   | PI535-Av. Las Parcelas / esq. Botswana                | doctors  | COSAM Lo Errázuriz                        |    308
+ 0       |    38 | PI536   | PI536-Parada / Colegio Errázuriz                      | doctors  | COSAM Lo Errázuriz                        |     77
+ 0       |    39 | PI537   | PI537-Sur de Chile / esq. Reyes Católicos             | doctors  | COSAM Lo Errázuriz                        |    432
+ 0       |    40 | PI538   | PI538-Sur de Chile / esq. Gandhi                      | clinic   | Cecosf lo Errazuriz                       |    296
+ 0       |    41 | PI539   | PI539-Parada / CECOSF Lo Errázuriz                    | clinic   | Cecosf lo Errazuriz                       |     52
+ 0       |    42 | PI1461  | PI1461-Santa Corina / esq. Ortega y Gasset            | clinic   | Cecosf lo Errazuriz                       |    189
+ 0       |    43 | PI38    | PI38-Parada 1 / Liceo A70                             | clinic   | Cecosf lo Errazuriz                       |    464
+ 0       |    44 | PI39    | PI39-Avenida 5 de Abril / esq. Quemchi                | clinic   | Cecosf Villa Francia                      |    497
+ 0       |    45 | PI40    | PI40-Avenida 5 de Abril / esq. Yelcho                 | clinic   | Cecosf Villa Francia                      |    546
+ 0       |    46 | PI41    | PI41-Avenida 5 de Abril / esq. Av. Aeropuerto         | clinic   | Cecosf Villa Francia                      |    728
+ 0       |    47 | PI42    | PI42-Avenida 5 de Abril / esq. Av. Aeropuerto         | pharmacy | Saint Germain                             |    642
+ 0       |    48 | PI43    | PI43-Avenida 5 de Abril / esq. Pasaje Sevilla         | pharmacy | Saint Germain                             |    389
+ 0       |    49 | PI44    | PI44-Parada 5 / 5 de Abril - Las Rejas                | pharmacy | Saint Germain                             |    108
+ 0       |    50 | PI540   | PI540-Avenida 5 de Abril / esq. Guadal                | pharmacy | Saint Germain                             |    175
+ 0       |    51 | PI541   | PI541-Parada / Liceo Polivalente Guillermo Feliú C.   | pharmacy | Farmacia Leo                              |    269
+ 0       |    52 | PI542   | PI542-Parada 1 / Colegio Villa España                 | pharmacy | Farmacia Leo                              |     25
+ 0       |    53 | PI543   | PI543-Avenida 5 de Abril / esq. General Amengual      | pharmacy | Farmacia Leo                              |    237
+ 0       |    54 | PI544   | PI544-Avenida 5 de Abril / esq. Padre V. Irarrázaval  | pharmacy | Farmacia Leo                              |    496
+ 0       |    55 | PI545   | PI545-Arica / esq. Av. Padre A. Hurtado               | pharmacy | Farmacias del Dr. Simi                    |    575
+ 0       |    56 | PI546   | PI546-Arica / esq. Ob. Manuel Umaña                   | pharmacy | Cruz Verde                                |    665
+ 0       |    57 | PA289   | PA289-Parada 1 / Molina - Blanco                      | pharmacy | (sin nombre en OSM)                       |    551
+ 0       |    58 | PA290   | PA290-Parada 1 / Avenida España - Blanco              | pharmacy | La Torre                                  |    446
+ 0       |    59 | PA433   | PA433-Parada 1 / Escuela de Ingeniería                | pharmacy | La Torre                                  |     69
+ 0       |    60 | PA434   | PA434-Parada 1 / Plaza Ercilla                        | pharmacy | La Torre                                  |    275
+ 0       |    61 | PA435   | PA435-Parada 4 / (M) Parque O'Higgins                 | pharmacy | Siboney                                   |     95
+ 0       |    62 | PA436   | PA436-Avenida Matta / esq. Nataniel Cox               | pharmacy | Cruz Verde                                |    269
+ 0       |    63 | PA658   | PA658-Avenida Matta / esq. San Diego                  | pharmacy | Cruz Verde                                |     52
+ 0       |    64 | PA438   | PA438-Parada 6 / (M) Matta                            | pharmacy | Valle de vida                             |     52
+ 0       |    65 | PA439   | PA439-Parada 5 / (M) Matta                            | pharmacy | Farmacia Nobel                            |     43
+ 0       |    66 | PA440   | PA440-Avenida Matta / esq. Carmen                     | clinic   | Policlínico Genchi                        |    187
+ 0       |    67 | PA666   | PA666-Avenida Matta / esq. Sierra Bella               | clinic   | Clínica Sierra Bella                      |    109
+ 0       |    68 | PA442   | PA442-Avenida Matta / esq. Avenida Portugal           | clinic   | Lifante                                   |    105
+ 0       |    69 | PD524   | PD524-Parada 3 / (M) Irarrázaval                      | pharmacy | Cruz Verde                                |    177
+ 0       |    70 | PD525   | PD525-Parada 3 / Conjunto Empart Ñuñoa                | pharmacy | SalcoBrand                                |    473
+ 0       |    71 | PD644   | PD644-Parada 1 / Villa Olímpica                       | clinic   | Centro Médico y Dental S.A.H.             |    123
+ 0       |    72 | PD589   | PD589-Parada 1 / Avenida Marathon                     | clinic   | Instituto de Salud Pública de Chile (ISP) |    326
+ 0       |    73 | PD115   | PD115-Parada 1 / (M) Estadio Nacional                 | pharmacy | (sin nombre en OSM)                       |    308
+ 0       |    74 | PD116   | PD116-Parada 1 / Los Tres Antonios                    | pharmacy | (sin nombre en OSM)                       |    340
+ 0       |    75 | PD590   | PD590-Parada 1 / Pedagógico                           | pharmacy | Farmacias Ahumada                         |     63
+ 0       |    76 | PD592   | PD592-Parada 1 / CESFAM Salvador Bustos               | clinic   | CESFAM Salvador Bustos                    |     97
+ 0       |    77 | PD645   | PD645-Parada 1 / Centro Olímpico Marlene Ahrens       | doctors  | Centro Integral de la Persona Mayor       |    493
+ 0       |    78 | PD535   | PD535-Parada 5 / (M) Grecia                           | clinic   | CESFAM Padre Gerardo Whelan               |    564
+ 0       |    79 | PD571   | PD571-Parada 1 / Los Molineros - Av. Grecia           | clinic   | Universal                                 |    505
+ 0       |    80 | PD572   | PD572-Parada 1 / Ictinos - Avenida Grecia             | clinic   | Universal                                 |     47
+ 0       |    81 | PD573   | PD573-Parada 1 / Calle 1A - Avenida Grecia            | pharmacy | Farmacia Jovita                           |    303
+ 0       |    82 | PD1322  | PD1322-Parada 1 / Tobalaba - Avenida Grecia           | pharmacy | Farmacia Jovita                           |    529
+ 0       |    83 | PD537   | PD537-Avenida Grecia / esq. Los Tordos                | doctors  | SAPU La Faena                             |    687
+ 0       |    84 | PD538   | PD538-Avenida Grecia / esq. Las Garzas                | pharmacy | SalcoBrand                                |    413
+ 0       |    85 | PD1323  | PD1323-Avenida Grecia / esq. Av. Consistorial         | pharmacy | SalcoBrand                                |     37
+ 0       |    86 | PD539   | PD539-Parada / Municipalidad de Peñalolén             | doctors  | SAPU Carol Urzúa Ibáñez                   |    178
+ 0       |    87 | PD540   | PD540-Parada 1 / El Acueducto - Jacarandá             | doctors  | CECOSF General Carol Urzúa Ibáñez         |    390
+ 0       |    88 | PD541   | PD541-Avenida Grecia / esq. Los Araucanos             | doctors  | CECOSF General Carol Urzúa Ibáñez         |    177
+ 0       |    89 | PD542   | PD542-Avenida Grecia / esq. Pablo Neruda              | doctors  | CECOSF General Carol Urzúa Ibáñez         |    450
+ 0       |    90 | PD543   | PD543-Avenida Grecia / esq. Av. Diag. Las Torres      | doctors  | CECOSF General Carol Urzúa Ibáñez         |    802
+ 0       |    91 | PD1439  | PD1439-Av. Diagonal Las Torres / esq. Álvaro Casanova | doctors  | CECOSF General Carol Urzúa Ibáñez         |    909
+ 1       |     1 | PD1429  | PD1429-Av. Diagonal Las Torres / esq. Álvaro Casanova | doctors  | CECOSF General Carol Urzúa Ibáñez         |    924
+ 1       |     2 | PD544   | PD544-Avenida Grecia / esq. Qda. de Sn. Pedro         | doctors  | CECOSF General Carol Urzúa Ibáñez         |    522
+ 1       |     3 | PD545   | PD545-Avenida Grecia / esq. Los Picachos              | doctors  | CECOSF General Carol Urzúa Ibáñez         |    224
+ 1       |     4 | PD548   | PD548-Avenida Grecia / esq. Jacarandá                 | doctors  | CECOSF General Carol Urzúa Ibáñez         |    287
+ 1       |     5 | PD547   | PD547-Avenida Grecia / esq. Amanecer                  | clinic   | Consultorio Carol Urzúa Ibáñez            |    404
+ 1       |     6 | PD1359  | PD1359-Parada / Municipalidad de Peñalolén            | clinic   | Servimedic                                |     94
+ 1       |     7 | PD549   | PD549-Avenida Grecia / esq. Palena                    | pharmacy | SalcoBrand                                |    299
+ 1       |     8 | PD550   | PD550-Avenida Grecia / esq. Pasaje 444                | pharmacy | SalcoBrand                                |    731
+ 1       |     9 | PD574   | PD574-Parada 2 / Calle 1A - Avenida Grecia            | pharmacy | Farmacia Jovita                           |    459
+ 1       |    10 | PD575   | PD575-Parada 2 / Ictinos - Avenida Grecia             | pharmacy | Farmacia Jovita                           |     31
+ 1       |    11 | PD576   | PD576-Parada 2 / Los Molineros - Av. Grecia           | clinic   | Universal                                 |    351
+ 1       |    12 | PD577   | PD577-Parada 2 / Cruz Almeyda - Avenida Grecia        | clinic   | CESFAM Padre Gerardo Whelan               |    478
+ 1       |    13 | PD553   | PD553-Parada 4 / (M) Grecia                           | clinic   | CESFAM Padre Gerardo Whelan               |    576
+ 1       |    14 | PD578   | PD578-Parada 2 / Centro Olímpico Marlene Ahrens       | doctors  | Centro Integral de la Persona Mayor       |    605
+ 1       |    15 | PD579   | PD579-Parada 2 / CESFAM Salvador Bustos               | clinic   | CESFAM Salvador Bustos                    |     59
+ 1       |    16 | PD559   | PD559-Parada 2 / Pedagógico                           | pharmacy | María Medicinal Growshop                  |     23
+ 1       |    17 | PD581   | PD581-Parada 2 / Los Tres Antonios                    | pharmacy | Farmacias Ahumada                         |    330
+ 1       |    18 | PD582   | PD582-Parada 2 / (M) Estadio Nacional                 | pharmacy | (sin nombre en OSM)                       |    213
+ 1       |    19 | PD583   | PD583-Parada 2 / Avenida Marathon                     | clinic   | Instituto de Salud Pública de Chile (ISP) |    399
+ 1       |    20 | PD584   | PD584-Parada 2 / Villa Olímpica                       | clinic   | Instituto de Salud Pública de Chile (ISP) |    232
+ 1       |    21 | PD585   | PD585-Parada 2 / Conjunto Empart Ñuñoa                | clinic   | Centro Médico y Dental S.A.H.             |    304
+ 1       |    22 | PD564   | PD564-Parada 2 / (M) Irarrázaval                      | pharmacy | SalcoBrand                                |    111
+ 1       |    23 | PA443   | PA443-Avenida Matta / esq. Avenida Portugal           | clinic   | Lifante                                   |    148
+ 1       |    24 | PA444   | PA444-Avenida Matta / esq. Lira                       | clinic   | Clínica Sierra Bella                      |    158
+ 1       |    25 | PA445   | PA445-Avenida Matta / esq. Carmen                     | clinic   | Policlínico Genchi                        |    188
+ 1       |    26 | PA446   | PA446-Parada 2 / (M) Matta                            | pharmacy | Farmacias del Dr. Simi                    |     32
+ 1       |    27 | PA447   | PA447-Parada 7 / (M) Matta                            | pharmacy | Valle de vida                             |     29
+ 1       |    28 | PA448   | PA448-Avenida Matta / esq. San Diego                  | pharmacy | Cruz Verde                                |     63
+ 1       |    29 | PA449   | PA449-Avenida Matta / esq. Nataniel Cox               | pharmacy | Cruz Verde                                |    231
+ 1       |    30 | PA450   | PA450-Parada 1 / (M) Parque O'Higgins                 | pharmacy | Siboney                                   |    104
+ 1       |    31 | PA451   | PA451-Parada 4 / Plaza Ercilla                        | pharmacy | La Torre                                  |    249
+ 1       |    32 | PA452   | PA452-Parada 4 / Escuela de Ingeniería                | pharmacy | La Torre                                  |     35
+ 1       |    33 | PA453   | PA453-Parada 4 / Avenida España - Blanco              | pharmacy | La Torre                                  |    398
+ 1       |    34 | PA278   | PA278-Parada 2 / Bascuñán - Blanco                    | pharmacy | (sin nombre en OSM)                       |    480
+ 1       |    35 | PI547   | PI547-Arica / esq. Jotabeche                          | pharmacy | Cruz Verde                                |    627
+ 1       |    36 | PI1182  | PI1182-Arica / esq. Nicasio Retamales                 | pharmacy | Farmacia Belgochilena                     |    588
+ 1       |    37 | PI548   | PI548-Arica / esq. Toro Mazotte                       | pharmacy | Farmacias del Dr. Simi                    |    539
+ 1       |    38 | PI549   | PI549-Avenida 5 de Abril / esq. Con Con               | pharmacy | Farmacia Leo                              |    480
+ 1       |    39 | PI550   | PI550-Avenida 5 de Abril / esq. General Amengual      | pharmacy | Farmacia Leo                              |    282
+ 1       |    40 | PI551   | PI551-Parada 2 / Colegio Villa España                 | pharmacy | Farmacia Leo                              |     24
+ 1       |    41 | PI552   | PI552-Avenida 5 de Abril / esq. Las Magnolias         | clinic   | Centro Médico y Dental                    |    299
+ 1       |    42 | PI553   | PI553-Parada 6 / 5 de Abril - Las Rejas               | pharmacy | Saint Germain                             |    121
+ 1       |    43 | PI3     | PI3-Avenida 5 de Abril / esq. Catalpas Pte.           | pharmacy | Saint Germain                             |    329
+ 1       |    44 | PI4     | PI4-Avenida 5 de Abril / esq. Los Duraznos            | pharmacy | Saint Germain                             |    548
+ 1       |    45 | PI5     | PI5-Avenida 5 de Abril / esq. Vista Hermosa           | clinic   | Cecosf Villa Francia                      |    749
+ 1       |    46 | PI6     | PI6-Avenida 5 de Abril / esq. Vista Hermosa           | clinic   | Cecosf Villa Francia                      |    609
+ 1       |    47 | PI7     | PI7-Avenida 5 de Abril / esq. El Altarcillo           | clinic   | Cecosf Villa Francia                      |    546
+ 1       |    48 | PI8     | PI8-Parada 2 / Liceo A70                              | clinic   | Cecosf lo Errazuriz                       |    446
+ 1       |    49 | PI1318  | PI1318-Santa Corina / esq. Voltaire                   | clinic   | Cecosf lo Errazuriz                       |    184
+ 1       |    50 | PI555   | PI555-Av. Las Parcelas / esq. Gracia de Dios          | clinic   | Cecosf lo Errazuriz                       |    373
+ 1       |    51 | PI1313  | PI1313-Av. Las Parcelas / esq. Avenida Las Torres     | doctors  | COSAM Lo Errázuriz                        |    431
+ 1       |    52 | PI556   | PI556-Av. Las Parcelas / esq. Los Ducados             | doctors  | COSAM Lo Errázuriz                        |    222
+ 1       |    53 | PI557   | PI557-Parada / Colegio Errázuriz                      | doctors  | COSAM Lo Errázuriz                        |     45
+ 1       |    54 | PI558   | PI558-Av. Las Parcelas / esq. Berkley                 | doctors  | COSAM Lo Errázuriz                        |    333
+ 1       |    55 | PI559   | PI559-Parada 4 / Paradero 10 Pajaritos                | pharmacy | Farmacias Saint Germain                   |    153
+ 1       |    56 | PI416   | PI416-Parada 1 / (M) Monte Tabor                      | pharmacy | Farmacias Saint Germain                   |    644
+ 1       |    57 | PI417   | PI417-Parada / Colegio Santa María de Maipú           | clinic   | CESFAM Clotario Blest                     |    756
+ 1       |    58 | PI418   | PI418-Parada 1 / Paradero 12 Pajaritos                | clinic   | CESFAM Clotario Blest                     |    607
+(117 rows)
+
+WITH viaje AS (
+    SELECT DISTINCT ON (t.direction_id) t.trip_id, t.direction_id
+    FROM gtfs_trips t JOIN gtfs_routes r USING (route_id)
+    WHERE r.route_short_name = '506' ORDER BY t.direction_id, t.trip_id
+), d AS (
+    SELECT v.direction_id, (SELECT a.geom <-> pg.geom FROM amenidades a
+                            WHERE a.amenity IN ('pharmacy','hospital','clinic','doctors')
+                            ORDER BY a.geom <-> pg.geom LIMIT 1) AS dist
+    FROM viaje v JOIN gtfs_stop_times st USING (trip_id) JOIN paraderos_gtfs pg USING (stop_id)
+)
+SELECT direction_id AS sentido, count(*) AS paraderos, round(avg(dist)) AS media_m,
+       round(percentile_cont(0.5) WITHIN GROUP (ORDER BY dist)) AS mediana_m, round(max(dist)) AS max_m,
+       count(*) FILTER (WHERE dist > 500) AS a_mas_de_500m
+FROM d GROUP BY direction_id ORDER BY 1;
+ sentido | paraderos | media_m | mediana_m | max_m | a_mas_de_500m 
+---------+-----------+---------+-----------+-------+---------------
+ 0       |        59 |     340 |       308 |   909 |            15
+ 1       |        58 |     340 |       316 |   924 |            15
+(2 rows)
+
+EXPLAIN (ANALYZE, BUFFERS, COSTS OFF)
+WITH viaje AS (
+    SELECT DISTINCT ON (t.direction_id) t.trip_id, t.direction_id
+    FROM gtfs_trips t JOIN gtfs_routes r USING (route_id)
+    WHERE r.route_short_name = '506' ORDER BY t.direction_id, t.trip_id
+)
+SELECT pg.stop_id, s.dist
+FROM viaje v JOIN gtfs_stop_times st USING (trip_id) JOIN paraderos_gtfs pg USING (stop_id)
+CROSS JOIN LATERAL (SELECT a.geom <-> pg.geom AS dist FROM amenidades a
+                    WHERE a.amenity IN ('pharmacy','hospital','clinic','doctors')
+                    ORDER BY a.geom <-> pg.geom LIMIT 1) s;
+                                                           QUERY PLAN                                                            
+---------------------------------------------------------------------------------------------------------------------------------
+ Nested Loop (actual time=4.202..7.692 rows=117 loops=1)
+   Buffers: shared hit=1389
+   ->  Nested Loop (actual time=4.155..4.558 rows=117 loops=1)
+         Buffers: shared hit=834
+         ->  Nested Loop (actual time=4.068..4.135 rows=183 loops=1)
+               Buffers: shared hit=351
+               ->  Unique (actual time=4.034..4.046 rows=2 loops=1)
+                     Buffers: shared hit=342
+                     ->  Sort (actual time=4.033..4.038 rows=58 loops=1)
+                           Sort Key: t.direction_id, t.trip_id
+                           Sort Method: quicksort  Memory: 27kB
+                           Buffers: shared hit=342
+                           ->  Hash Join (actual time=0.829..3.948 rows=58 loops=1)
+                                 Hash Cond: (t.route_id = r.route_id)
+                                 Buffers: shared hit=342
+                                 ->  Seq Scan on gtfs_trips t (actual time=0.006..2.069 rows=26137 loops=1)
+                                       Buffers: shared hit=336
+                                 ->  Hash (actual time=0.041..0.042 rows=1 loops=1)
+                                       Buckets: 1024  Batches: 1  Memory Usage: 9kB
+                                       Buffers: shared hit=6
+                                       ->  Seq Scan on gtfs_routes r (actual time=0.018..0.038 rows=1 loops=1)
+                                             Filter: (route_short_name = '506'::text)
+                                             Rows Removed by Filter: 424
+                                             Buffers: shared hit=6
+               ->  Index Scan using gtfs_stop_times_trip_id_idx on gtfs_stop_times st (actual time=0.017..0.031 rows=92 loops=2)
+                     Index Cond: (trip_id = t.trip_id)
+                     Buffers: shared hit=9
+         ->  Index Scan using idx_paraderos_gtfs_id on paraderos_gtfs pg (actual time=0.002..0.002 rows=1 loops=183)
+               Index Cond: (stop_id = st.stop_id)
+               Buffers: shared hit=483
+   ->  Limit (actual time=0.026..0.026 rows=1 loops=117)
+         Buffers: shared hit=555
+         ->  Index Scan using idx_amenidades_salud on amenidades a (actual time=0.026..0.026 rows=1 loops=117)
+               Order By: (geom <-> pg.geom)
+               Buffers: shared hit=555
+ Planning:
+   Buffers: shared hit=6
+ Planning Time: 0.497 ms
+ Execution Time: 7.755 ms
+(39 rows)
+

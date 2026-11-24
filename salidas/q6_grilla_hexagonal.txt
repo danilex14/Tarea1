@@ -1,0 +1,72 @@
+DROP MATERIALIZED VIEW IF EXISTS mv_grilla;
+DROP MATERIALIZED VIEW
+CREATE MATERIALIZED VIEW mv_grilla AS
+WITH h AS (
+    SELECT g.i, g.j, g.geom
+    FROM zona z, ST_HexagonGrid(500, z.geom) AS g
+    WHERE ST_Intersects(g.geom, z.geom)
+)
+SELECT h.i, h.j,
+       (SELECT count(*) FROM edificios e WHERE ST_Intersects(h.geom, e.punto))                AS edificios,
+       (SELECT count(DISTINCT r.route_id) FROM recorridos r
+         WHERE r.route_type = 3 AND ST_Intersects(h.geom, r.geom))                            AS recorridos_bus,
+       (SELECT count(DISTINCT r.route_id) FROM recorridos r WHERE ST_Intersects(h.geom, r.geom)) AS recorridos,
+       (SELECT count(*) FROM paraderos_gtfs p WHERE ST_Intersects(h.geom, p.geom))            AS paraderos_gtfs,
+       ST_Within(h.geom, (SELECT geom FROM zona))                                              AS completa,
+       h.geom::geometry(Polygon, 5361) AS geom
+FROM h;
+SELECT 636
+CREATE INDEX idx_mv_grilla_geom ON mv_grilla USING GIST (geom);
+CREATE INDEX
+CREATE UNIQUE INDEX idx_mv_grilla_ij ON mv_grilla (i, j);
+CREATE INDEX
+ANALYZE mv_grilla;
+ANALYZE
+SELECT count(*) AS celdas, count(*) FILTER (WHERE completa) AS completas,
+       sum(edificios) AS edificios, max(edificios) AS max_edificios,
+       count(*) FILTER (WHERE recorridos = 0) AS celdas_sin_recorrido,
+       count(*) FILTER (WHERE recorridos = 0 AND edificios > 0) AS con_edificios_sin_recorrido
+FROM mv_grilla;
+ celdas | completas | edificios | max_edificios | celdas_sin_recorrido | con_edificios_sin_recorrido 
+--------+-----------+-----------+---------------+----------------------+-----------------------------
+    636 |       526 |    121207 |          2511 |                   59 |                          35
+(1 row)
+
+SELECT m.i, m.j, m.edificios, m.recorridos, m.recorridos_bus, m.paraderos_gtfs,
+       (SELECT string_agg(DISTINCT c.comuna, ', ') FROM comunas_zona c
+         WHERE ST_Intersects(c.geom, ST_Centroid(m.geom))) AS comuna,
+       round(ST_X(ST_Transform(ST_Centroid(m.geom), 4326))::numeric, 4) AS lon,
+       round(ST_Y(ST_Transform(ST_Centroid(m.geom), 4326))::numeric, 4) AS lat
+FROM mv_grilla m
+WHERE m.completa AND m.edificios >= 200
+ORDER BY m.recorridos ASC, m.edificios DESC
+LIMIT 10;
+  i  |  j   | edificios | recorridos | recorridos_bus | paraderos_gtfs |   comuna    |   lon    |   lat    
+-----+------+-----------+------------+----------------+----------------+-------------+----------+----------
+ 472 | 7275 |       755 |          0 |              0 |              0 | Las Condes  | -70.5704 | -33.4264
+ 469 | 7274 |       456 |          1 |              1 |              2 | Providencia | -70.5947 | -33.4300
+ 470 | 7272 |       768 |          2 |              2 |             10 | Ñuñoa       | -70.5870 | -33.4497
+ 472 | 7267 |       702 |          2 |              2 |              2 | Peñalolén   | -70.5716 | -33.4889
+ 476 | 7274 |       428 |          2 |              2 |              6 | La Reina    | -70.5383 | -33.4346
+ 475 | 7274 |       319 |          2 |              2 |              2 | La Reina    | -70.5463 | -33.4306
+ 473 | 7275 |       240 |          2 |              2 |              4 | Las Condes  | -70.5623 | -33.4226
+ 470 | 7273 |      1341 |          3 |              3 |              4 | Ñuñoa       | -70.5868 | -33.4418
+ 471 | 7272 |      1321 |          3 |              3 |             13 | Ñuñoa       | -70.5788 | -33.4459
+ 469 | 7273 |      1028 |          3 |              3 |              6 | Providencia | -70.5948 | -33.4378
+(10 rows)
+
+SELECT i, j, edificios, recorridos FROM mv_grilla ORDER BY edificios DESC LIMIT 10;
+  i  |  j   | edificios | recorridos 
+-----+------+-----------+------------
+ 450 | 7269 |      2511 |          7
+ 464 | 7270 |      2450 |          7
+ 464 | 7269 |      1870 |         10
+ 463 | 7269 |      1741 |         25
+ 451 | 7268 |      1551 |         22
+ 470 | 7273 |      1341 |          3
+ 471 | 7272 |      1321 |          3
+ 462 | 7269 |      1244 |         27
+ 470 | 7274 |      1098 |         13
+ 463 | 7270 |      1091 |         21
+(10 rows)
+

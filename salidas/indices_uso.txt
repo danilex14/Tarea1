@@ -1,0 +1,36 @@
+      tabla      |           indice            | lecturas | tuplas_leidas |   tamano   
+-----------------+-----------------------------+----------+---------------+------------
+ osm_puntos      | osm_puntos_geom_geom_idx    |        0 |             0 | 10 MB
+ osm_lineas      | osm_lineas_geom_geom_idx    |        0 |             0 | 7984 kB
+ osm_poligonos   | osm_poligonos_geom_geom_idx |        0 |             0 | 7176 kB
+ osm_puntos      | osm_puntos_pkey             |        0 |             0 | 5704 kB
+ edificios       | idx_edificios_geom          |        0 |             0 | 4944 kB
+ osm_lineas      | osm_lineas_pkey             |        0 |             0 | 3760 kB
+ osm_poligonos   | osm_poligonos_pkey          |        0 |             0 | 3312 kB
+ gtfs_trips      | gtfs_trips_trip_id_idx      |        0 |             0 | 936 kB
+ amenidades      | idx_amenidades_geom         |        0 |             0 | 880 kB
+ paradero_ruta   | paradero_ruta_stop_id_idx   |        0 |             0 | 568 kB
+ paradero_ruta   | paradero_ruta_route_id_idx  |        0 |             0 | 296 kB
+ gtfs_trips      | idx_gtfs_trips_shape        |        0 |             0 | 216 kB
+ amenidades      | idx_amenidades_amenity      |        0 |             0 | 168 kB
+ mv_grilla       | idx_mv_grilla_geom          |        0 |             0 | 40 kB
+ recorridos      | idx_recorridos_route        |        0 |             0 | 32 kB
+ mv_grilla       | idx_mv_grilla_ij            |        0 |             0 | 32 kB
+ comunas_cl      | idx_comunas_cl_geom         |        0 |             0 | 24 kB
+ rutas           | idx_rutas_geom              |        0 |             0 | 24 kB
+ comunas_cl      | comunas_cl_pkey             |        0 |             0 | 16 kB
+ comunas_sub     | idx_comunas_sub_geom        |        0 |             0 | 8192 bytes
+ calles          | idx_calles_geom             |        1 |        101584 | 4160 kB
+ gtfs_stop_times | gtfs_stop_times_trip_id_idx |        6 |           549 | 8224 kB
+ comunas_zona    | idx_comunas_zona_geom       |       10 |            30 | 8192 bytes
+ vias_tramos     | idx_vias_tramos_medio       |       30 |        312864 | 8056 kB
+ recorridos_sub  | idx_recorridos_sub_geom     |      134 |         78748 | 1416 kB
+ paraderos_gtfs  | idx_paraderos_gtfs_id       |      555 |           357 | 168 kB
+ edificios       | idx_edificios_punto         |      666 |        430145 | 4888 kB
+ amenidades      | idx_amenidades_salud        |      702 |          1404 | 56 kB
+ recorridos      | idx_recorridos_geom         |    98593 |       5276412 | 40 kB
+ recorridos_seg  | idx_recorridos_seg_geom     |   194060 |        427146 | 2208 kB
+ paraderos_osm   | idx_paraderos_osm_geom      |   241710 |        406308 | 264 kB
+ paraderos_gtfs  | idx_paraderos_gtfs_geom     |   343982 |        657632 | 272 kB
+(32 rows)
+

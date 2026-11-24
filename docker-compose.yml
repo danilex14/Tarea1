@@ -1,0 +1,57 @@
+# Tarea 1 — PostGIS de punta a punta (Santiago centro)
+#
+#     docker compose up -d --wait     # levanta PostGIS y la caja de herramientas GDAL
+#     ./cargar.sh                     # deja todo cargado, indexado y con ANALYZE
+#     ./consultas.sh                  # corre las 7 preguntas y deja resultados en salidas/
+#     docker compose down -v          # apaga y borra también el volumen
+#
+# Dos servicios, ambos con imágenes públicas de Docker Hub (no se construye nada):
+#   db   → postgis/postgis:16-3.4      PostgreSQL 16 + PostGIS 3.4 (las versiones del curso)
+#   gdal → osgeo/gdal:ubuntu-small-3.6.3  ogr2ogr / ogrinfo / unzip, con los drivers OSM, GPKG,
+#          Shapefile y PostgreSQL. Queda "dormido" y el script le hace `exec`.
+# Por qué dos y no el Dockerfile del Lab 05: así `docker compose up -d` no depende de un
+# apt-get dentro de la construcción (el paso que más falla en máquinas con red restringida).
+services:
+  db:
+    image: postgis/postgis:16-3.4
+    container_name: t1-postgis
+    environment:
+      POSTGRES_PASSWORD: pmd2026
+      POSTGRES_DB: tarea1
+    ports:
+      - "5435:5432"                   # 5434 es el del Lab 05: así conviven
+    command: >
+      postgres -c shared_buffers=1GB -c work_mem=64MB -c maintenance_work_mem=512MB
+               -c max_wal_size=4GB -c jit=off
+    shm_size: 1gb
+    volumes:
+      - t1-pgdata:/var/lib/postgresql/data    # volumen con nombre: los datos sobreviven a `down`
+      - ./datos:/datos                         # intermedios (GeoPackage recortado, CSV del GTFS)
+      - ./sql:/sql:ro                          # el ETL
+      - ./consultas:/consultas:ro              # las preguntas
+      - ./salidas:/salidas                     # resultados, planes, exportaciones
+    healthcheck:
+      # -h 127.0.0.1: durante la inicialización del volumen PostgreSQL escucha solo por socket;
+      # así el healthcheck no da "listo" antes de que terminen los scripts de initdb.
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U postgres -d tarea1"]
+      interval: 3s
+      timeout: 3s
+      retries: 40
+
+  gdal:
+    image: osgeo/gdal:ubuntu-small-3.6.3
+    container_name: t1-gdal
+    command: ["sleep", "infinity"]
+    environment:
+      PG_CONN: "PG:host=db dbname=tarea1 user=postgres password=pmd2026"
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - ./datos_fuente:/fuente:ro              # los tres archivos fuente, tal cual se descargan
+      - ./datos:/datos
+      - ./salidas:/salidas
+
+volumes:
+  t1-pgdata:
+    name: t1-pgdata

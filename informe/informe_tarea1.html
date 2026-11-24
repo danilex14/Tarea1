@@ -1,0 +1,215 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Tarea 1 — PostGIS de punta a punta</title>
+<style>
+  @page { size: A4; margin: 14mm 14mm 14mm 14mm; }
+  body { font-family: "Inter", "Helvetica Neue", Arial, sans-serif; font-size: 9.3pt; line-height: 1.38; color: #1d1d1f; margin: 0; }
+  h1 { font-size: 15pt; margin: 0 0 2pt; }
+  h2 { font-size: 11.2pt; margin: 9pt 0 3pt; padding-bottom: 2pt; border-bottom: 1px solid #ccc; break-after: avoid; }
+  h3 { font-size: 9.6pt; margin: 6pt 0 2pt; break-after: avoid; }
+  p { margin: 2pt 0 4pt; }
+  .meta { color: #555; font-size: 8.6pt; margin-bottom: 6pt; }
+  .fuentes { background: #f4f6f8; border-left: 3px solid #4a6fa5; padding: 4pt 7pt; font-size: 8.4pt; margin: 4pt 0 6pt; }
+  table { border-collapse: collapse; font-size: 8pt; margin: 3pt 0 5pt; }
+  th, td { border-bottom: 1px solid #ddd; padding: 1.5pt 5pt; text-align: right; white-space: nowrap; }
+  th:first-child, td:first-child { text-align: left; }
+  th { background: #eef1f4; font-weight: 600; white-space: normal; }
+  .two { display: flex; gap: 10pt; align-items: flex-start; }
+  .two > div { flex: 1; min-width: 0; }
+  figure { margin: 4pt 0 6pt; break-inside: avoid; }
+  figure img { width: 100%; display: block; }
+  figcaption { font-size: 7.8pt; color: #555; margin-top: 2pt; }
+  .interp { border-left: 3px solid #e6550d; padding-left: 6pt; margin: 4pt 0 6pt; }
+  .plan { font-family: "DejaVu Sans Mono", monospace; font-size: 7.2pt; background: #f7f7f7; padding: 3pt 5pt; white-space: pre; margin: 3pt 0; overflow: hidden; }
+  code { font-family: "DejaVu Sans Mono", monospace; font-size: 8pt; background: #f2f2f2; padding: 0 2pt; }
+  .pb { break-before: page; }
+  ul { margin: 2pt 0 4pt 14pt; padding: 0; }
+  li { margin: 1pt 0; }
+</style>
+</head>
+<body>
+
+<h1>Tarea 1 — PostGIS de punta a punta: Santiago centro</h1>
+<div class="meta">Procesamiento Masivo de Datos · ELE051-B / EIN102B · USM 2026-2 · Paralelo 701 · Prof. Diego Ramírez<br>
+Integrantes: <b>Danilo Paredes</b> · <b>Felipe Contreras</b> · Repositorio: <b>https://github.com/danilex14/Tarea1</b></div>
+
+<div class="fuentes"><b>Fuentes y fechas (acompañan a toda conclusión).</b> OSM: extracto de Chile de Geofabrik <code>chile-261122.osm.pbf</code>, datos al <b>22-11-2026</b> (lo que voluntarios dibujaron). GTFS: DTPM <code>GTFS_20261114_v2.zip</code>, versión <b>V171.20261114</b>, vigente 14-11 a 31-12-2026 (lo que el operador declara). Comunas: DPA 2023 de IDE Chile. Zona: caja lon −70,75…−70,52 · lat −33,52…−33,36 (30 comunas la tocan; 13 completas). Cálculo en SRID 5361.</div>
+
+<p><b>Pregunta guía:</b> ¿cómo se relaciona la ciudad construida (OSM) con la red de transporte público (GTFS)? En la caja hay 121.207 edificios, 6.819 paraderos GTFS (6.576 de bus), 6.574 <code>bus_stop</code> de OSM y 699 trazados (shapes) de 344 rutas. La carga completa toma alrededor de un minuto y las 7 preguntas unos 4 minutos.</p>
+
+<h2>P1 · Paraderos GTFS por comuna y densidad</h2>
+<p><i>Patrón:</i> punto-en-polígono, <code>LEFT JOIN paraderos_gtfs ON ST_Contains(comuna, paradero)</code> + <code>GROUP BY</code>. La densidad se divide por el área de la comuna <b>dentro de la caja</b>, porque solo se cargaron los paraderos de la caja.</p>
+<div class="two">
+<div>
+<table>
+<tr><th>Comuna (≥ 50 % en la caja)</th><th>Paraderos</th><th>km² en caja</th><th>por km²</th></tr>
+<tr><td>Lo Prado</td><td>201</td><td>6,5</td><td>30,7</td></tr>
+<tr><td>Conchalí</td><td>317</td><td>10,9</td><td>29,0</td></tr>
+<tr><td>Santiago</td><td>624</td><td>23,2</td><td>26,9</td></tr>
+<tr><td>San Joaquín</td><td>246</td><td>9,9</td><td>24,8</td></tr>
+<tr><td>Quinta Normal</td><td>286</td><td>11,8</td><td>24,2</td></tr>
+<tr><td>…</td><td></td><td></td><td></td></tr>
+<tr><td>Peñalolén (57 %)</td><td>440</td><td>30,9</td><td>14,3</td></tr>
+<tr><td>Renca (71 %)</td><td>239</td><td>16,7</td><td>14,3</td></tr>
+<tr><td>Vitacura (92 %)</td><td>195</td><td>26,3</td><td>7,4</td></tr>
+</table>
+</div>
+<div>
+<p class="interp">Según el GTFS de noviembre 2026, la densidad de paraderos es más alta en comunas pericentrales de trama fina (Lo Prado, Conchalí, Santiago: 27–31 por km²) que en el oriente acomodado (Vitacura 7,4; Huechuraba 8,1), donde hay cerros, manzanas grandes y vías rápidas. Las comunas apenas tocadas por la caja (San Ramón, La Granja) dan densidades poco confiables y se listan aparte.</p>
+<p><b>Plan (comentado).</b> <code>Nested Loop Left Join</code>: 30 comunas por <i>Seq Scan</i> afuera y, por cada una, <b>Index Scan using idx_paraderos_gtfs_geom</b> con <code>Index Cond: (geom @ c.geom)</code> (caja contenida en caja) y <code>Filter: st_contains</code> como fase 2. 17 ms. Sin el índice, son 30 × 6.819 = 204 mil <code>ST_Contains</code> (58 ms en una corrida previa sin índices): aquí el índice importa poco porque la tabla es chica.</p>
+</div>
+</div>
+
+<h2>P2 · Cobertura: edificios a más de 500 m de cualquier paradero</h2>
+<p><i>Patrón:</i> anti-join <code>NOT EXISTS (… ST_DWithin(p.geom, e.punto, 500))</code>, una vez contra <code>paraderos_gtfs</code> y otra contra <code>paraderos_osm</code>. Edificio = punto interior. Para evitar el efecto borde (el paradero más cercano podría estar fuera de la caja, no cargado) se excluyen los 10.216 edificios a menos de 500 m del borde de la caja.</p>
+<div class="two">
+<div style="flex:0.8">
+<table>
+<tr><th>Comuna</th><th>Edificios</th><th>% lejos GTFS</th><th>% lejos OSM</th></tr>
+<tr><td>Huechuraba</td><td>867</td><td>15,6</td><td>15,1</td></tr>
+<tr><td>Quilicura</td><td>1.481</td><td>4,2</td><td>4,3</td></tr>
+<tr><td>Vitacura</td><td>3.985</td><td>3,9</td><td>3,9</td></tr>
+<tr><td>Peñalolén</td><td>3.672</td><td>3,2</td><td>2,8</td></tr>
+<tr><td>Recoleta</td><td>3.101</td><td>1,9</td><td>1,0</td></tr>
+<tr><td>La Reina</td><td>11.423</td><td>1,8</td><td>1,3</td></tr>
+<tr><td>Providencia</td><td>12.133</td><td>0,7</td><td>0,1</td></tr>
+<tr><td>16 comunas más</td><td></td><td>0,0</td><td>0,0</td></tr>
+<tr><th>Zona completa</th><th>110.991</th><th>0,95</th><th>0,78</th></tr>
+</table>
+</div>
+<div>
+<p class="interp">La ciudad construida está casi completamente a menos de 500 m de un paradero: 0,95 % de los edificios queda fuera según GTFS y 0,78 % según OSM. Los bolsones están en el borde de los cerros (Huechuraba, al pie del cerro; Vitacura y Peñalolén hacia la precordillera; Quilicura industrial). <b>La conclusión no cambia con la fuente</b>: el orden de las comunas es el mismo. OSM sale levemente "mejor" porque tiene algunos <code>bus_stop</code> que el GTFS no declara (P3), lo que acerca edificios a un paradero que quizás ya no existe.</p>
+<p><b>Plan.</b> <code>Nested Loop Anti Join</code> paralelo: <i>Parallel Seq Scan on edificios</i> afuera (121 mil filas) y adentro <b>Index Scan using idx_paraderos_gtfs_geom</b>, <code>Index Cond: (geom &amp;&amp; st_expand(e.punto, 500))</code>, <code>Filter: st_dwithin</code>. El índice se usa <b>del lado de adentro</b> (paraderos) y corta en la primera fila encontrada (rows=1): 0,40 s. Sin él serían 121 mil × 6.819 ≈ 830 millones de distancias.</p>
+</div>
+</div>
+<figure><img src="../salidas/mapas/p2_cobertura_500m.png"><figcaption>Mapa P2. Mismo cálculo con las dos fuentes; escala común. Comunas con menos de 100 edificios en la caja sin colorear.</figcaption></figure>
+
+<h2>P3 · Dos fuentes, un objeto</h2>
+<p><i>Patrón:</i> anti-join en los dos sentidos con <code>ST_DWithin</code>, paraderos de bus GTFS contra <code>highway=bus_stop</code> de OSM, con sensibilidad al umbral.</p>
+<div class="two">
+<div style="flex:0.9">
+<table>
+<tr><th>Umbral</th><th>GTFS sin OSM</th><th>OSM sin GTFS</th></tr>
+<tr><td>25 m</td><td>1.004 (15,3 %)</td><td>996 (15,2 %)</td></tr>
+<tr><td><b>50 m</b></td><td><b>382 (5,8 %)</b></td><td><b>367 (5,6 %)</b></td></tr>
+<tr><td>100 m</td><td>142 (2,2 %)</td><td>138 (2,1 %)</td></tr>
+</table>
+<p>De 6.576 paraderos de bus GTFS y 6.574 <code>bus_stop</code> OSM. A 50 m, por comuna, OSM está más incompleto en Huechuraba (17,5 % sin pareja), Peñalolén (10,5 %) y Quilicura (9,6 %), y casi completo en Santiago (3,5 %), Macul y Cerrillos.</p>
+</div>
+<div>
+<p class="interp">Las dos fuentes casi coinciden en número y lugar: a 50 m solo ~6 % de cada lado queda sin pareja, y la cifra cae a 2 % a 100 m, así que la mayor parte de la diferencia es de <b>posición</b> (el punto dibujado en la vereda vs. la coordenada del operador), no de existencia. Lo que queda sin pareja a 100 m son paraderos nuevos que OSM no dibujó en la periferia o <code>bus_stop</code> de OSM que el GTFS no declara (paraderos retirados, de servicios rurales o de colectivos). OSM en Santiago está muy completo para paraderos, pero es una foto del 22-11-2026 hecha por voluntarios.</p>
+<p><b>Plan.</b> <code>Nested Loop Anti Join</code> con <b>Index Scan using idx_paraderos_osm_geom</b> adentro, <code>Index Cond: (geom &amp;&amp; st_expand(g.geom, 50))</code>: <b>49 ms</b>. Con <code>enable_indexscan</code> y <code>enable_bitmapscan</code> apagados el plan pasa a <i>Seq Scan + Materialize</i> y evalúa 21 millones de <code>st_dwithin</code>: <b>5.949 ms</b> (≈ 120× más lento).</p>
+</div>
+</div>
+<figure style="width:52%; margin-left:auto; margin-right:auto"><img src="../salidas/mapas/p3_dos_fuentes.png"><figcaption>Mapa P3. Rojo: paradero GTFS sin <code>bus_stop</code> OSM a 50 m. Azul: <code>bus_stop</code> OSM sin paradero GTFS a 50 m. Los pares rojo-azul muy juntos son el mismo paradero desplazado.</figcaption></figure>
+
+<h2>P4 · Kilómetros de recorrido por comuna</h2>
+<p><i>Patrón:</i> líneas contra polígonos, <code>sum(ST_Length(ST_Intersection(r.geom, c.geom_caja)))</code> con <code>JOIN … ON ST_Intersects</code>. Se usa la parte de cada comuna dentro de la caja.</p>
+<div class="two">
+<div style="flex:0.9">
+<table>
+<tr><th>Comuna</th><th>km (todos los shapes)</th><th>km (ida)</th><th>Rutas</th><th>km/km²</th></tr>
+<tr><td>Santiago</td><td>1.332,9</td><td>745,2</td><td>155</td><td>57,5</td></tr>
+<tr><td>Estación Central</td><td>590,8</td><td>315,1</td><td>81</td><td>41,1</td></tr>
+<tr><td>Lo Prado</td><td>258,6</td><td>137,5</td><td>69</td><td>39,5</td></tr>
+<tr><td>Providencia</td><td>492,5</td><td>273,6</td><td>83</td><td>34,1</td></tr>
+<tr><td>Ñuñoa</td><td>576,9</td><td>318,3</td><td>59</td><td>34,1</td></tr>
+<tr><td>…</td><td></td><td></td><td></td><td></td></tr>
+<tr><td>Huechuraba</td><td>294,4</td><td>150,6</td><td>49</td><td>14,0</td></tr>
+<tr><td>Vitacura</td><td>349,6</td><td>147,9</td><td>40</td><td>13,3</td></tr>
+<tr><th>Total zona</th><th>10.006</th><th></th><th>344</th><th></th></tr>
+</table>
+</div>
+<div>
+<p class="interp">La comuna de Santiago concentra 13 % de los kilómetros de servicio de la zona y 57 km por km²: todo el sistema converge al centro. Vitacura y Huechuraba tienen menos de un cuarto de esa intensidad.</p>
+<p><b>Efecto de <code>ST_Subdivide</code>.</b> Los km son idénticos (10.006,2) con <code>comunas_zona</code>, con <code>comunas_sub</code> (128 vértices) y subdividiendo también los recorridos. Los tiempos quedaron en el ruido: 0,80 s sin subdividir, 0,97 s con comunas subdivididas y 0,86 s con ambos lados (en otra corrida: 0,71 / 0,91 / 0,84 s). <b>Aquí Subdivide no ayuda</b>: recortadas a la caja, las comunas tienen 191 vértices en promedio, y lo caro de <code>ST_Intersection</code> son los recorridos (506 vértices y cajas de varios km). El índice <code>idx_recorridos_geom</code> se usa (<code>Index Cond: geom &amp;&amp; c.geom_caja</code>) pero descarta poco: 115 filas removidas por filtro por cada 101 que pasan.</p>
+</div>
+</div>
+
+<h2>P5 · Farmacia o centro de salud más cercano: recorrido 506</h2>
+<p><i>Patrón:</i> <code>CROSS JOIN LATERAL (… ORDER BY a.geom &lt;-&gt; p.geom LIMIT 1)</code>. Recorrido <b>506 (Maipú – Peñalolén)</b>, elegido porque cruza toda la zona de poniente a oriente (Av. 5 de Abril, Av. Matta, Av. Grecia). Los paraderos salen de un viaje representativo por sentido (<code>stop_times</code>), ordenados por <code>stop_sequence</code>; amenidades <code>pharmacy</code>, <code>hospital</code>, <code>clinic</code> y <code>doctors</code> de OSM.</p>
+<div class="two">
+<div style="flex:0.8">
+<table>
+<tr><th>Sentido</th><th>Paraderos en caja</th><th>Mediana</th><th>Máx.</th><th>&gt; 500 m</th></tr>
+<tr><td>0 (ida)</td><td>59</td><td>308 m</td><td>909 m</td><td>15</td></tr>
+<tr><td>1 (vuelta)</td><td>58</td><td>316 m</td><td>924 m</td><td>15</td></tr>
+</table>
+<p>Más lejanos: Av. Diagonal Las Torres / Álvaro Casanova (Peñalolén) a 909–924 m del CECOSF General Carol Urzúa; Av. 5 de Abril (Estación Central) a 700–750 m del CESFAM/Cecosf más próximo.</p>
+</div>
+<div>
+<p class="interp">A lo largo del 506 la mitad de los paraderos tiene una farmacia o centro de salud (según OSM) a ~310 m; uno de cada cuatro queda a más de 500 m, concentrados en los extremos residenciales del recorrido (Maipú–Estación Central y Peñalolén alto). En el tramo central por Av. Matta (Santiago) todos los paraderos tienen una farmacia o clínica a menos de 280 m.</p>
+<p><b>Plan.</b> Por cada uno de los 117 paraderos, <code>Limit</code> sobre <b>Index Scan using idx_amenidades_salud</b> con <code>Order By: (geom &lt;-&gt; pg.geom)</code>: el KNN recorre el índice por distancia y se detiene en la primera fila (0,03 ms por paradero, 8 ms en total). El índice usado es el <b>parcial</b> (solo amenidades de salud): con el GiST general habría que descartar bancos, escuelas y estacionamientos en orden de distancia hasta encontrar una de las 4 categorías.</p>
+</div>
+</div>
+
+<h2>P6 · Grilla hexagonal de 500 m: edificios y recorridos (mapa principal)</h2>
+<p><i>Patrón:</i> <code>ST_HexagonGrid(500, zona)</code> (500 m de lado, ≈ 0,65 km² por celda) en una vista materializada <code>mv_grilla</code> con subconsultas por celda: edificios por punto interior y <code>count(DISTINCT route_id)</code> de los shapes que cruzan la celda. 636 celdas (526 completas dentro de la caja), máximo 2.511 edificios en una celda; 59 celdas sin ningún recorrido, 35 de ellas con edificios. Criterio para "más edificios y menos recorridos": celdas completas con ≥ 200 edificios, ordenadas por recorridos ascendente y luego por edificios descendente.</p>
+<figure><img src="../salidas/mapas/p6_grilla_edificios_recorridos.png"><figcaption>Mapa P6. Izquierda: edificios OSM (22-11-2026) por hexágono. Derecha: rutas GTFS distintas (V171.20261114) que cruzan cada hexágono. Celeste: las 10 celdas de la tabla (coordenadas en <code>salidas/q6_grilla_hexagonal.txt</code>).</figcaption></figure>
+<div class="two">
+<div style="flex:0.95">
+<table>
+<tr><th>Comuna (centro de celda)</th><th>Edificios</th><th>Recorridos</th><th>Paraderos</th></tr>
+<tr><td>Las Condes</td><td>755</td><td>0</td><td>0</td></tr>
+<tr><td>Providencia</td><td>456</td><td>1</td><td>2</td></tr>
+<tr><td>Ñuñoa</td><td>768</td><td>2</td><td>10</td></tr>
+<tr><td>Peñalolén</td><td>702</td><td>2</td><td>2</td></tr>
+<tr><td>La Reina</td><td>428</td><td>2</td><td>6</td></tr>
+<tr><td>La Reina</td><td>319</td><td>2</td><td>2</td></tr>
+<tr><td>Las Condes</td><td>240</td><td>2</td><td>4</td></tr>
+<tr><td>Ñuñoa</td><td>1.341</td><td>3</td><td>4</td></tr>
+<tr><td>Ñuñoa</td><td>1.321</td><td>3</td><td>13</td></tr>
+<tr><td>Providencia</td><td>1.028</td><td>3</td><td>6</td></tr>
+</table>
+</div>
+<div>
+<p class="interp">Las 10 celdas forman un solo bolsón en el oriente (Ñuñoa, Providencia, La Reina, Las Condes), barrios residenciales de casas dentro de la trama entre grandes ejes. Allí hay entre 240 y 1.341 edificios por celda y solo 0 a 3 rutas, contra 20 a 77 en el eje Alameda–Providencia. Los buses corren por los ejes del borde de cada celda (por eso hay paraderos sin recorridos que crucen el interior). <b>Ojo con el dato:</b> en OSM "edificio" es cualquier polígono <code>building</code>; una celda de 1.300 casas no equivale a 1.300 torres, así que esto mide forma urbana, no población. El extremo poniente (Maipú, con 2.511 edificios en una celda y 7 rutas) es el contraejemplo: muy denso en edificios pero con más servicio.</p>
+</div>
+</div>
+
+<h2>P7 (propia) · ¿Qué parte de las vías principales no tiene ningún bus encima?</h2>
+<p><i>Por qué cruza las dos fuentes:</i> compara la red vial que existe (OSM: <code>highway</code> trunk, primary, secondary y tertiary) con la red de buses que el operador declara (GTFS shapes, <code>route_type = 3</code>), línea contra línea. <i>Método:</i> cada vía se corta en tramos de ≤ 50 m (<code>ST_Segmentize</code> + <code>ST_DumpSegments</code>); un tramo está "servido" si un trazado de bus pasa a ≤ 25 m de su punto medio (<code>EXISTS … ST_DWithin</code>). Los trazados se parten antes con <code>ST_Subdivide(geom, 16)</code>.</p>
+<div class="two">
+<div style="flex:0.85">
+<table>
+<tr><th>Tipo de vía</th><th>km</th><th>km sin bus</th><th>%</th></tr>
+<tr><td>trunk</td><td>2,8</td><td>2,6</td><td>90,2</td></tr>
+<tr><td>primary</td><td>526,6</td><td>13,8</td><td>2,6</td></tr>
+<tr><td>secondary</td><td>633,9</td><td>101,8</td><td>16,1</td></tr>
+<tr><td>tertiary</td><td>900,1</td><td>387,4</td><td>43,0</td></tr>
+<tr><th>Total</th><th>2.063,4</th><th>505,6</th><th>24,5</th></tr>
+</table>
+<table>
+<tr><th>Comuna</th><th>% sin bus</th></tr>
+<tr><td>Las Condes</td><td>43,5</td></tr>
+<tr><td>Vitacura</td><td>39,6</td></tr>
+<tr><td>Providencia</td><td>33,5</td></tr>
+<tr><td>Santiago</td><td>18,5</td></tr>
+<tr><td>Conchalí</td><td>8,0</td></tr>
+</table>
+</div>
+<div>
+<p class="interp">Un cuarto de los kilómetros de vías principales de OSM no tiene ningún recorrido de bus declarado encima. Las <i>primary</i> están casi todas servidas (97 %), pero el 43 % de las <i>tertiary</i> no. Las vías principales sin buses se concentran en el oriente (Las Condes, Vitacura, Providencia: 34–44 %): Pdte. Riesco, Costanera Sur, Av. Las Torres, Diego de Almagro, Holanda y Ricardo Lyon tienen entre 3 y 6 km sin servicio cada una. Calza con P6: el oriente tiene vías, pero los buses se concentran en pocos ejes. En el centro, los tramos sin bus son en buena parte la otra calzada de pares de calles con buses en un solo sentido (el único "trunk" de la zona es un tramo corto de Av. Isabel Riquelme).</p>
+<p><b>Plan.</b> Mismo <code>EXISTS</code> contra los recorridos enteros: <b>14,0 s</b>; contra <code>recorridos_seg</code>: <b>0,60 s</b> (23×), con el mismo resultado. Con shapes enteros el <code>Index Cond: geom &amp;&amp; st_expand(medio, 25)</code> deja pasar casi todos los shapes que tienen una caja de kilómetros; con trozos de ≤ 16 vértices la caja es ajustada y el filtro de fase 2 casi no trabaja.</p>
+</div>
+</div>
+<figure style="width:55%; margin-left:auto; margin-right:auto"><img src="../salidas/mapas/p7_vias_sin_bus.png"><figcaption>Mapa P7. Naranjo: tramos de vía principal OSM (22-11-2026) sin trazado de bus GTFS (V171.20261114) a 25 m.</figcaption></figure>
+
+<h2 class="pb">Decisiones del pipeline</h2>
+<ul>
+<li><b>Infraestructura.</b> <code>docker-compose.yml</code> con dos imágenes públicas: <code>postgis/postgis:16-3.4</code> (volumen con nombre <code>t1-pgdata</code>) y <code>osgeo/gdal:ubuntu-small-3.6.3</code> (ogr2ogr, unzip). No se construye nada, así que <code>docker compose up -d</code> no depende de un <code>apt-get</code>. Un solo script, <code>cargar.sh</code>, deja todo cargado, indexado y con <code>ANALYZE</code> (probado desde un volumen vacío y sin intermedios: 64 s). El healthcheck usa <code>pg_isready -h 127.0.0.1</code> porque sin <code>-h</code> daba "listo" durante la inicialización y el ETL chocaba con ella.</li>
+<li><b>SRID 5361 en todo cálculo.</b> OSM se reproyecta al recortar con <code>ogr2ogr -spat … -t_srs EPSG:5361</code> (lo mismo que <code>preparar_datos.py</code> del Lab 05); la DPA 2023 viene en 5360 (grados) y se reproyecta; el GTFS se construye en 4326 con <code>ST_SetSRID(ST_MakePoint(lon, lat), 4326)</code> y se transforma una vez. La caja se guarda en una tabla <code>zona</code> y todo se recorta contra ella en la base. Solo los GeoJSON de los mapas van en 4326.</li>
+<li><b>Punto interior vs. polígono.</b> Edificios y amenidades poligonales se asignan a comuna o hexágono por <code>ST_PointOnSurface</code>: cada edificio cuenta una sola vez aunque cruce un límite, y el punto cae dentro del edificio, a diferencia del centroide. El polígono se guarda para áreas.</li>
+<li><b>Reparaciones.</b> 375 polígonos OSM inválidos (236 anillos de 3 puntos, 79 de 2 puntos, 60 auto-intersecciones). Con <code>ST_Multi(ST_CollectionExtract(ST_MakeValid(geom), 3))</code> quedan 0 inválidos y 315 vacíos (anillos degenerados), que se excluyen; 203 de ellos eran edificios. Las 345 comunas de la DPA son válidas. Todo queda contado en la tabla <code>registro_etl</code>.</li>
+<li><b>GTFS.</b> CSV crudos por <code>COPY</code> del lado del servidor (<code>stop_times.txt</code>: 1.098.717 filas; todo el COPY del GTFS toma ~3 s, en tablas <code>UNLOGGED</code>), con validación de cabeceras antes de cargar. <code>recorridos</code>: <code>ST_MakeLine(punto ORDER BY shape_pt_sequence)</code> por <code>shape_id</code>, asociado a su ruta vía <code>trips → routes</code>. Verificado: ningún shape es compartido por dos rutas, no hay secuencias repetidas ni shapes de menos de 2 puntos.</li>
+<li><b>Shapes múltiples por ruta.</b> Cada shape (ida, vuelta, variante) es una fila: son trazados físicos distintos. "Recorridos distintos" = <code>count(DISTINCT route_id)</code>; los km de P4 se dan sumando todos los shapes (servicio) y solo la ida (≈ red). La tabla <code>rutas</code> junta los shapes de cada ruta para mapas. <code>stop_times</code> no cuenta buses reales (los viajes son plantillas con <code>frequencies.txt</code>), por eso se usa para saber qué rutas pasan por cada paradero, no cuántos viajes.</li>
+<li><b>Índices creados.</b> GiST en cada geometría derivada (y en <code>edificios.punto</code>), uno parcial GiST para amenidades de salud, B-tree en <code>stop_id</code>, <code>route_id</code>, <code>trip_id</code>; <code>ANALYZE</code> al final de la carga y tras cada tabla creada en consultas.</li>
+<li><b>Índices inútiles</b> (<code>pg_stat_user_indexes</code> tras correr P1–P7 con estadísticas reiniciadas): <code>idx_edificios_geom</code> (4,9 MB, 0 lecturas: todo se hizo por el punto interior), <code>idx_amenidades_geom</code> (0: el parcial lo reemplazó), los GiST de las tablas crudas <code>osm_*</code> que crea ogr2ogr (24 MB, 0: después de derivar nadie las consulta), <code>idx_comunas_sub_geom</code> y <code>idx_comunas_cl_geom</code> (las comunas van siempre afuera del nested loop), <code>idx_rutas_geom</code> e <code>idx_recorridos_route</code>. Los más usados: paraderos GTFS (344 mil lecturas), paraderos OSM (242 mil), recorridos partidos (194 mil).</li>
+<li><b>Lo que <code>ST_Subdivide</code> enseñó.</b> En P4 no aceleró (las comunas urbanas recortadas tienen pocos vértices); en P7, partir el lado de las <b>líneas</b> fue lo que dio 23×. La regla útil: subdividir el lado cuya caja es grande respecto de lo que se busca.</li>
+<li><b>Honestidad con el dato.</b> Los <code>bus_stop</code>, edificios y amenidades son lo que voluntarios dibujaron en OSM al 22-11-2026; paraderos y trazados son lo que DTPM declara para el período 14-11 a 31-12-2026. Los resultados de borde (comunas cortadas por la caja, edificios a &lt; 500 m del borde) están marcados o excluidos.</li>
+</ul>
+
+</body>
+</html>

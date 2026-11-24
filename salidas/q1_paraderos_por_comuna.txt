@@ -1,0 +1,88 @@
+SELECT c.comuna,
+       count(p.stop_id)                                          AS paraderos,
+       count(p.stop_id) FILTER (WHERE p.modo LIKE '%bus%')       AS de_bus,
+       round(c.area_caja_km2::numeric, 1)                        AS km2_en_caja,
+       round((count(p.stop_id) / c.area_caja_km2)::numeric, 1)   AS por_km2,
+       c.pct_en_caja
+FROM comunas_zona c
+LEFT JOIN paraderos_gtfs p ON ST_Contains(c.geom, p.geom)
+GROUP BY c.comuna, c.area_caja_km2, c.pct_en_caja
+ORDER BY (c.pct_en_caja >= 50) DESC, por_km2 DESC;
+       comuna        | paraderos | de_bus | km2_en_caja | por_km2 | pct_en_caja 
+---------------------+-----------+--------+-------------+---------+-------------
+ Lo Prado            |       201 |    191 |         6.5 |    30.7 |       100.0
+ Conchalí            |       317 |    311 |        10.9 |    29.0 |       100.0
+ Santiago            |       624 |    573 |        23.2 |    26.9 |       100.0
+ San Joaquín         |       246 |    244 |         9.9 |    24.8 |       100.0
+ Quinta Normal       |       286 |    282 |        11.8 |    24.2 |       100.0
+ Ñuñoa               |       386 |    363 |        16.9 |    22.9 |       100.0
+ Cerro Navia         |       163 |    163 |         7.1 |    22.9 |        64.5
+ Estación Central    |       322 |    310 |        14.4 |    22.4 |       100.0
+ Pedro Aguirre Cerda |       192 |    186 |         8.7 |    22.0 |       100.0
+ Macul               |       281 |    271 |        12.8 |    21.9 |       100.0
+ Recoleta            |       341 |    327 |        15.6 |    21.8 |       100.0
+ Independencia       |       156 |    152 |         7.4 |    21.2 |       100.0
+ San Miguel          |       193 |    180 |         9.6 |    20.0 |       100.0
+ Providencia         |       270 |    242 |        14.4 |    18.7 |       100.0
+ Cerrillos           |       280 |    278 |        15.2 |    18.4 |        90.5
+ La Reina            |       269 |    262 |        17.1 |    15.7 |        73.2
+ Peñalolén           |       440 |    430 |        30.9 |    14.3 |        57.3
+ Renca               |       239 |    239 |        16.7 |    14.3 |        70.7
+ Vitacura            |       195 |    195 |        26.3 |     7.4 |        92.1
+ San Ramón           |         6 |      6 |         0.2 |    36.9 |         2.6
+ Lo Espejo           |       120 |    118 |         4.0 |    29.7 |        49.0
+ La Granja           |        27 |     27 |         1.1 |    25.0 |        10.7
+ La Cisterna         |        40 |     37 |         1.7 |    23.2 |        17.2
+ Pudahuel            |       102 |     96 |         5.1 |    19.8 |         2.6
+ Maipú               |       214 |    210 |        11.2 |    19.1 |         8.2
+ La Florida          |       171 |    165 |         9.1 |    18.8 |        12.8
+ Las Condes          |       376 |    364 |        30.9 |    12.2 |        31.2
+ Quilicura           |       186 |    178 |        16.7 |    11.2 |        29.0
+ Huechuraba          |       171 |    171 |        21.0 |     8.1 |        46.7
+ Lo Barnechea        |         5 |      5 |         2.8 |     1.8 |         0.3
+(30 rows)
+
+EXPLAIN (ANALYZE, BUFFERS, COSTS OFF)
+SELECT c.comuna, count(p.stop_id)
+FROM comunas_zona c
+LEFT JOIN paraderos_gtfs p ON ST_Contains(c.geom, p.geom)
+GROUP BY c.comuna;
+                                                      QUERY PLAN                                                       
+-----------------------------------------------------------------------------------------------------------------------
+ HashAggregate (actual time=16.694..16.700 rows=30 loops=1)
+   Group Key: c.comuna
+   Batches: 1  Memory Usage: 24kB
+   Buffers: shared hit=11453
+   ->  Nested Loop Left Join (actual time=0.056..15.730 rows=6819 loops=1)
+         Buffers: shared hit=11453
+         ->  Seq Scan on comunas_zona c (actual time=0.008..0.052 rows=30 loops=1)
+               Buffers: shared hit=50
+         ->  Index Scan using idx_paraderos_gtfs_geom on paraderos_gtfs p (actual time=0.099..0.491 rows=227 loops=30)
+               Index Cond: (geom @ c.geom)
+               Filter: st_contains(c.geom, geom)
+               Rows Removed by Filter: 256
+               Buffers: shared hit=11361
+ Planning Time: 0.284 ms
+ Execution Time: 16.809 ms
+(15 rows)
+
+EXPLAIN (ANALYZE, COSTS OFF)
+SELECT s.comuna, count(p.stop_id)
+FROM comunas_sub s
+JOIN paraderos_gtfs p ON ST_Contains(s.geom, p.geom)
+GROUP BY s.comuna;
+                                                      QUERY PLAN                                                       
+-----------------------------------------------------------------------------------------------------------------------
+ HashAggregate (actual time=10.332..10.336 rows=30 loops=1)
+   Group Key: s.comuna
+   Batches: 1  Memory Usage: 24kB
+   ->  Nested Loop (actual time=0.036..9.381 rows=6819 loops=1)
+         ->  Seq Scan on comunas_sub s (actual time=0.012..0.045 rows=67 loops=1)
+         ->  Index Scan using idx_paraderos_gtfs_geom on paraderos_gtfs p (actual time=0.017..0.129 rows=102 loops=67)
+               Index Cond: (geom @ s.geom)
+               Filter: st_contains(s.geom, geom)
+               Rows Removed by Filter: 44
+ Planning Time: 0.581 ms
+ Execution Time: 10.378 ms
+(11 rows)
+

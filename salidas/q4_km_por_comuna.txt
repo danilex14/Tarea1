@@ -1,0 +1,201 @@
+Timing is on.
+SELECT c.comuna,
+       round((sum(ST_Length(ST_Intersection(r.geom, c.geom_caja))) / 1000)::numeric, 1) AS km_shapes,
+       round((sum(ST_Length(ST_Intersection(r.geom, c.geom_caja))) FILTER (WHERE r.direction_id = 0) / 1000)::numeric, 1) AS km_ida,
+       count(DISTINCT r.route_id) AS rutas,
+       round((sum(ST_Length(ST_Intersection(r.geom, c.geom_caja))) / 1000 / c.area_caja_km2)::numeric, 1) AS km_por_km2
+FROM comunas_zona c
+JOIN recorridos r ON ST_Intersects(r.geom, c.geom_caja)
+GROUP BY c.comuna, c.area_caja_km2
+ORDER BY km_shapes DESC;
+       comuna        | km_shapes | km_ida | rutas | km_por_km2 
+---------------------+-----------+--------+-------+------------
+ Santiago            |    1332.9 |  745.2 |   155 |       57.5
+ Las Condes          |     700.7 |  405.8 |    73 |       22.7
+ Peñalolén           |     641.8 |  407.9 |    66 |       20.8
+ Estación Central    |     590.8 |  315.1 |    81 |       41.1
+ Ñuñoa               |     576.9 |  318.3 |    59 |       34.1
+ Providencia         |     492.5 |  273.6 |    83 |       34.1
+ La Reina            |     406.3 |  271.2 |    36 |       23.7
+ Quilicura           |     404.6 |  234.0 |    46 |       24.3
+ Renca               |     362.3 |  246.2 |    33 |       21.7
+ Maipú               |     351.7 |  180.0 |    61 |       31.4
+ Vitacura            |     349.6 |  147.9 |    40 |       13.3
+ Cerrillos           |     340.1 |  185.2 |    53 |       22.3
+ Macul               |     326.5 |  164.4 |    52 |       25.5
+ Quinta Normal       |     320.7 |  198.1 |    45 |       27.2
+ Conchalí            |     304.3 |  197.5 |    50 |       27.8
+ Huechuraba          |     294.4 |  150.6 |    49 |       14.0
+ Recoleta            |     277.3 |  199.2 |    69 |       17.8
+ San Miguel          |     264.1 |  163.6 |    49 |       27.4
+ Lo Prado            |     258.6 |  137.5 |    69 |       39.5
+ La Florida          |     246.7 |  147.2 |    58 |       27.2
+ Pedro Aguirre Cerda |     229.0 |  115.5 |    39 |       26.2
+ San Joaquín         |     214.6 |   82.3 |    40 |       21.6
+ Independencia       |     204.2 |  138.1 |    42 |       27.8
+ Cerro Navia         |     170.7 |   97.8 |    32 |       23.9
+ Pudahuel            |     143.9 |   78.8 |    63 |       28.0
+ Lo Espejo           |     123.0 |   61.4 |    36 |       30.4
+ La Cisterna         |      48.4 |   27.8 |    28 |       28.1
+ La Granja           |      17.5 |   11.8 |    20 |       16.2
+ Lo Barnechea        |       7.8 |    3.7 |    10 |        2.8
+ San Ramón           |       4.3 |    3.1 |    14 |       26.5
+(30 rows)
+
+Time: 1115.717 ms (00:01.116)
+SELECT s.comuna,
+       round((sum(ST_Length(ST_Intersection(r.geom, s.geom))) / 1000)::numeric, 1) AS km_shapes
+FROM comunas_sub s
+JOIN recorridos r ON ST_Intersects(r.geom, s.geom)
+GROUP BY s.comuna
+ORDER BY km_shapes DESC;
+       comuna        | km_shapes 
+---------------------+-----------
+ Santiago            |    1332.9
+ Las Condes          |     700.7
+ Peñalolén           |     641.8
+ Estación Central    |     590.8
+ Ñuñoa               |     576.9
+ Providencia         |     492.5
+ La Reina            |     406.3
+ Quilicura           |     404.6
+ Renca               |     362.3
+ Maipú               |     351.7
+ Vitacura            |     349.6
+ Cerrillos           |     340.1
+ Macul               |     326.5
+ Quinta Normal       |     320.7
+ Conchalí            |     304.3
+ Huechuraba          |     294.4
+ Recoleta            |     277.3
+ San Miguel          |     264.1
+ Lo Prado            |     258.6
+ La Florida          |     246.7
+ Pedro Aguirre Cerda |     229.0
+ San Joaquín         |     214.6
+ Independencia       |     204.2
+ Cerro Navia         |     170.7
+ Pudahuel            |     143.9
+ Lo Espejo           |     123.0
+ La Cisterna         |      48.4
+ La Granja           |      17.5
+ Lo Barnechea        |       7.8
+ San Ramón           |       4.3
+(30 rows)
+
+Time: 927.644 ms
+Timing is off.
+EXPLAIN (ANALYZE, BUFFERS, COSTS OFF)
+SELECT c.comuna, sum(ST_Length(ST_Intersection(r.geom, c.geom_caja)))
+FROM comunas_zona c JOIN recorridos r ON ST_Intersects(r.geom, c.geom_caja)
+GROUP BY c.comuna;
+                                                     QUERY PLAN                                                      
+---------------------------------------------------------------------------------------------------------------------
+ GroupAggregate (actual time=193.518..803.079 rows=30 loops=1)
+   Group Key: c.comuna
+   Buffers: shared hit=30237
+   ->  Sort (actual time=175.958..177.031 rows=3044 loops=1)
+         Sort Key: c.comuna
+         Sort Method: quicksort  Memory: 16340kB
+         Buffers: shared hit=22042
+         ->  Nested Loop (actual time=0.197..167.227 rows=3044 loops=1)
+               Buffers: shared hit=22042
+               ->  Seq Scan on comunas_zona c (actual time=0.011..0.121 rows=30 loops=1)
+                     Buffers: shared hit=50
+               ->  Index Scan using idx_recorridos_geom on recorridos r (actual time=0.397..5.543 rows=101 loops=30)
+                     Index Cond: (geom && c.geom_caja)
+                     Filter: st_intersects(geom, c.geom_caja)
+                     Rows Removed by Filter: 115
+                     Buffers: shared hit=21987
+ Planning Time: 0.276 ms
+ Execution Time: 803.176 ms
+(18 rows)
+
+EXPLAIN (ANALYZE, BUFFERS, COSTS OFF)
+SELECT s.comuna, sum(ST_Length(ST_Intersection(r.geom, s.geom)))
+FROM comunas_sub s JOIN recorridos r ON ST_Intersects(r.geom, s.geom)
+GROUP BY s.comuna;
+                                                     QUERY PLAN                                                     
+--------------------------------------------------------------------------------------------------------------------
+ GroupAggregate (actual time=302.984..972.448 rows=30 loops=1)
+   Group Key: s.comuna
+   Buffers: shared hit=55038
+   ->  Sort (actual time=287.757..289.258 rows=4814 loops=1)
+         Sort Key: s.comuna
+         Sort Method: quicksort  Memory: 18013kB
+         Buffers: shared hit=42517
+         ->  Nested Loop (actual time=0.288..281.642 rows=4814 loops=1)
+               Buffers: shared hit=42517
+               ->  Seq Scan on comunas_sub s (actual time=0.010..0.118 rows=67 loops=1)
+                     Buffers: shared hit=16
+               ->  Index Scan using idx_recorridos_geom on recorridos r (actual time=0.349..4.185 rows=72 loops=67)
+                     Index Cond: (geom && s.geom)
+                     Filter: st_intersects(geom, s.geom)
+                     Rows Removed by Filter: 107
+                     Buffers: shared hit=42501
+ Planning Time: 0.299 ms
+ Execution Time: 972.539 ms
+(18 rows)
+
+DROP TABLE IF EXISTS recorridos_sub;
+DROP TABLE
+CREATE TABLE recorridos_sub AS
+SELECT shape_id, route_id, ST_Subdivide(geom, 32)::geometry(LineString, 5361) AS geom FROM recorridos;
+SELECT 33125
+CREATE INDEX idx_recorridos_sub_geom ON recorridos_sub USING GIST (geom);
+CREATE INDEX
+ANALYZE recorridos_sub;
+ANALYZE
+SELECT 'comunas_zona x recorridos' AS variante, count(*) AS pares, round((sum(ST_Length(ST_Intersection(r.geom, c.geom_caja)))/1000)::numeric, 1) AS km
+FROM comunas_zona c JOIN recorridos r ON ST_Intersects(r.geom, c.geom_caja)
+UNION ALL
+SELECT 'comunas_sub x recorridos', count(*), round((sum(ST_Length(ST_Intersection(r.geom, s.geom)))/1000)::numeric, 1)
+FROM comunas_sub s JOIN recorridos r ON ST_Intersects(r.geom, s.geom)
+UNION ALL
+SELECT 'comunas_sub x recorridos_sub', count(*), round((sum(ST_Length(ST_Intersection(r.geom, s.geom)))/1000)::numeric, 1)
+FROM comunas_sub s JOIN recorridos_sub r ON ST_Intersects(r.geom, s.geom);
+           variante           | pares |   km    
+------------------------------+-------+---------
+ comunas_zona x recorridos    |  3044 | 10006.2
+ comunas_sub x recorridos_sub | 28497 | 10006.2
+ comunas_sub x recorridos     |  4814 | 10006.2
+(3 rows)
+
+SELECT 'comunas (en caja)' AS capa, round(avg(ST_NPoints(geom_caja))) AS vertices_prom, max(ST_NPoints(geom_caja)) AS vertices_max FROM comunas_zona
+UNION ALL SELECT 'comunas_sub', round(avg(ST_NPoints(geom))), max(ST_NPoints(geom)) FROM comunas_sub
+UNION ALL SELECT 'recorridos', round(avg(ST_NPoints(geom))), max(ST_NPoints(geom)) FROM recorridos
+UNION ALL SELECT 'recorridos_sub', round(avg(ST_NPoints(geom))), max(ST_NPoints(geom)) FROM recorridos_sub;
+       capa        | vertices_prom | vertices_max 
+-------------------+---------------+--------------
+ comunas (en caja) |           191 |          312
+ comunas_sub       |            88 |          128
+ recorridos        |           506 |         1361
+ recorridos_sub    |            12 |           32
+(4 rows)
+
+EXPLAIN (ANALYZE, BUFFERS, COSTS OFF)
+SELECT s.comuna, sum(ST_Length(ST_Intersection(r.geom, s.geom)))
+FROM comunas_sub s JOIN recorridos_sub r ON ST_Intersects(r.geom, s.geom)
+GROUP BY s.comuna;
+                                                         QUERY PLAN                                                          
+-----------------------------------------------------------------------------------------------------------------------------
+ GroupAggregate (actual time=150.729..859.666 rows=30 loops=1)
+   Group Key: s.comuna
+   Buffers: shared hit=36979
+   ->  Sort (actual time=130.713..135.679 rows=28497 loops=1)
+         Sort Key: s.comuna
+         Sort Method: quicksort  Memory: 51163kB
+         Buffers: shared hit=36979
+         ->  Nested Loop (actual time=0.177..95.626 rows=28497 loops=1)
+               Buffers: shared hit=36979
+               ->  Seq Scan on comunas_sub s (actual time=0.007..0.087 rows=67 loops=1)
+                     Buffers: shared hit=16
+               ->  Index Scan using idx_recorridos_sub_geom on recorridos_sub r (actual time=0.102..1.365 rows=425 loops=67)
+                     Index Cond: (geom && s.geom)
+                     Filter: st_intersects(geom, s.geom)
+                     Rows Removed by Filter: 162
+                     Buffers: shared hit=36963
+ Planning Time: 0.340 ms
+ Execution Time: 861.575 ms
+(18 rows)
+

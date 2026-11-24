@@ -1,0 +1,109 @@
+WITH g AS (SELECT stop_id, geom FROM paraderos_gtfs WHERE modo LIKE '%bus%'),
+     o AS (SELECT id, geom FROM paraderos_osm)
+SELECT umbral_m,
+       (SELECT count(*) FROM g) AS gtfs_bus,
+       (SELECT count(*) FROM g WHERE NOT EXISTS (SELECT 1 FROM o WHERE ST_DWithin(o.geom, g.geom, umbral_m))) AS gtfs_sin_osm,
+       (SELECT count(*) FROM o) AS osm_bus_stop,
+       (SELECT count(*) FROM o WHERE NOT EXISTS (SELECT 1 FROM g WHERE ST_DWithin(g.geom, o.geom, umbral_m))) AS osm_sin_gtfs
+FROM (VALUES (25), (50), (100)) AS u(umbral_m)
+ORDER BY umbral_m;
+ umbral_m | gtfs_bus | gtfs_sin_osm | osm_bus_stop | osm_sin_gtfs 
+----------+----------+--------------+--------------+--------------
+       25 |     6576 |         1004 |         6574 |          996
+       50 |     6576 |          382 |         6574 |          367
+      100 |     6576 |          142 |         6574 |          138
+(3 rows)
+
+SELECT c.comuna,
+       count(*) AS gtfs_bus,
+       count(*) FILTER (WHERE NOT EXISTS (SELECT 1 FROM paraderos_osm o WHERE ST_DWithin(o.geom, g.geom, 50))) AS sin_osm,
+       round(100.0 * count(*) FILTER (WHERE NOT EXISTS (SELECT 1 FROM paraderos_osm o WHERE ST_DWithin(o.geom, g.geom, 50))) / count(*), 1) AS pct_sin_osm
+FROM comunas_zona c
+JOIN paraderos_gtfs g ON ST_Contains(c.geom, g.geom) AND g.modo LIKE '%bus%'
+GROUP BY c.comuna
+HAVING count(*) >= 50
+ORDER BY pct_sin_osm DESC;
+       comuna        | gtfs_bus | sin_osm | pct_sin_osm 
+---------------------+----------+---------+-------------
+ Huechuraba          |      171 |      30 |        17.5
+ Peñalolén           |      430 |      45 |        10.5
+ Quilicura           |      178 |      17 |         9.6
+ Quinta Normal       |      282 |      24 |         8.5
+ La Florida          |      165 |      13 |         7.9
+ Vitacura            |      195 |      15 |         7.7
+ Independencia       |      152 |      11 |         7.2
+ Renca               |      239 |      16 |         6.7
+ La Reina            |      262 |      17 |         6.5
+ Conchalí            |      311 |      20 |         6.4
+ Cerro Navia         |      163 |      10 |         6.1
+ Las Condes          |      364 |      21 |         5.8
+ Estación Central    |      310 |      17 |         5.5
+ Ñuñoa               |      363 |      18 |         5.0
+ San Miguel          |      180 |       9 |         5.0
+ Pedro Aguirre Cerda |      186 |       9 |         4.8
+ Lo Prado            |      191 |       9 |         4.7
+ San Joaquín         |      244 |      11 |         4.5
+ Recoleta            |      327 |      13 |         4.0
+ Maipú               |      210 |       8 |         3.8
+ Providencia         |      242 |       9 |         3.7
+ Santiago            |      573 |      20 |         3.5
+ Cerrillos           |      278 |       8 |         2.9
+ Macul               |      271 |       7 |         2.6
+ Pudahuel            |       96 |       2 |         2.1
+ Lo Espejo           |      118 |       2 |         1.7
+(26 rows)
+
+EXPLAIN (ANALYZE, BUFFERS, COSTS OFF)
+SELECT count(*)
+FROM paraderos_gtfs g
+WHERE g.modo LIKE '%bus%'
+  AND NOT EXISTS (SELECT 1 FROM paraderos_osm o WHERE ST_DWithin(o.geom, g.geom, 50));
+                                                     QUERY PLAN                                                      
+---------------------------------------------------------------------------------------------------------------------
+ Aggregate (actual time=48.669..48.671 rows=1 loops=1)
+   Buffers: shared hit=20103
+   ->  Nested Loop Anti Join (actual time=0.059..48.608 rows=382 loops=1)
+         Buffers: shared hit=20103
+         ->  Seq Scan on paraderos_gtfs g (actual time=0.011..1.211 rows=6576 loops=1)
+               Filter: (modo ~~ '%bus%'::text)
+               Rows Removed by Filter: 243
+               Buffers: shared hit=128
+         ->  Index Scan using idx_paraderos_osm_geom on paraderos_osm o (actual time=0.007..0.007 rows=1 loops=6576)
+               Index Cond: (geom && st_expand(g.geom, '50'::double precision))
+               Filter: st_dwithin(geom, g.geom, '50'::double precision)
+               Rows Removed by Filter: 0
+               Buffers: shared hit=19975
+ Planning:
+   Buffers: shared hit=2
+ Planning Time: 1.919 ms
+ Execution Time: 48.716 ms
+(17 rows)
+
+SET enable_indexscan = off;
+SET
+SET enable_bitmapscan = off;
+SET
+EXPLAIN (ANALYZE, COSTS OFF)
+SELECT count(*)
+FROM paraderos_gtfs g
+WHERE g.modo LIKE '%bus%'
+  AND NOT EXISTS (SELECT 1 FROM paraderos_osm o WHERE ST_DWithin(o.geom, g.geom, 50));
+                                         QUERY PLAN                                         
+--------------------------------------------------------------------------------------------
+ Aggregate (actual time=5949.173..5949.175 rows=1 loops=1)
+   ->  Nested Loop Anti Join (actual time=6.348..5948.580 rows=382 loops=1)
+         Join Filter: st_dwithin(o.geom, g.geom, '50'::double precision)
+         Rows Removed by Join Filter: 21222934
+         ->  Seq Scan on paraderos_gtfs g (actual time=0.019..7.308 rows=6576 loops=1)
+               Filter: (modo ~~ '%bus%'::text)
+               Rows Removed by Filter: 243
+         ->  Materialize (actual time=0.000..0.141 rows=3228 loops=6576)
+               ->  Seq Scan on paraderos_osm o (actual time=0.005..0.936 rows=6574 loops=1)
+ Planning Time: 3.408 ms
+ Execution Time: 5949.296 ms
+(11 rows)
+
+RESET enable_indexscan;
+RESET
+RESET enable_bitmapscan;
+RESET

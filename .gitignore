@@ -1,0 +1,22 @@
+# Los datos fuente NO se versionan (enunciado, descuento de -10)
+datos_fuente/*
+!datos_fuente/LEEME.md
+datos/
+*.osm.pbf
+*.zip
+# GeoPackages: solo se versiona el de resultados (salidas/)
+*.gpkg
+!salidas/resultados_santiago-centro.gpkg
+*.dump
+*.shp
+*.shx
+*.dbf
+*.prj
+*.cpg
+# Python / editores
+__pycache__/
+*.py[cod]
+.venv/
+.ipynb_checkpoints/
+.DS_Store
+salidas/geojson/
